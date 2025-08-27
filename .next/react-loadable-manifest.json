@@ -1,1 +1,26 @@
-{}
+{
+  "app/page.tsx -> @/components/AuditPreview": {
+    "id": "app/page.tsx -> @/components/AuditPreview",
+    "files": [
+      "static/chunks/_app-pages-browser_src_components_AuditPreview_tsx.js"
+    ]
+  },
+  "app/page.tsx -> @/components/FooterCta": {
+    "id": "app/page.tsx -> @/components/FooterCta",
+    "files": [
+      "static/chunks/_app-pages-browser_src_components_FooterCta_tsx.js"
+    ]
+  },
+  "app/page.tsx -> @/components/KeyFeatures": {
+    "id": "app/page.tsx -> @/components/KeyFeatures",
+    "files": [
+      "static/chunks/_app-pages-browser_src_components_KeyFeatures_tsx.js"
+    ]
+  },
+  "app/page.tsx -> @/components/Pricing": {
+    "id": "app/page.tsx -> @/components/Pricing",
+    "files": [
+      "static/chunks/_app-pages-browser_src_components_Pricing_tsx.js"
+    ]
+  }
+}

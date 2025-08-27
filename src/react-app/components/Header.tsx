@@ -26,10 +26,7 @@ export default function Header() {
           <a href="#" className="text-sm font-medium text-slate-300 hover:text-white transition-colors">Pricing</a>
           <div className="hidden h-6 w-px bg-white/10 md:block"></div>
           <a href="#" className="text-sm font-medium text-slate-300 hover:text-white transition-colors">Log in</a>
-          <button className="group relative inline-flex cursor-pointer transition-all duration-[1000ms] ease-[cubic-bezier(0.15,0.83,0.66,1)] hover:-translate-y-[3px] hover:scale-[1.1] hover:text-white text-xs font-medium text-white/70 tracking-tight rounded-full pt-[8px] pr-[16px] pb-[8px] pl-[16px] items-center justify-center" style={{boxShadow:'inset 0 0 0 1px rgba(255,255,255,0.1)',background:'radial-gradient(ellipse at bottom,rgba(71,81,92,1) 0%,rgba(0,0,0,1) 100%)'}}>
-            <span className="relative z-10 text-sm font-normal rounded-full">Start Free Audit</span>
-            <span aria-hidden="true" className="absolute bottom-0 left-1/2 h-[1px] w-[70%] -translate-x-1/2 opacity-20 transition-all duration-[1000ms] ease-[cubic-bezier(0.15,0.83,0.66,1)] group-hover:opacity-80 text-xs rounded-full" style={{background:'linear-gradient(90deg,rgba(255,255,255,0) 0%,rgba(255,255,255,1) 50%,rgba(255,255,255,0) 100%)'}}></span>
-          </button>
+          <button className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 transition-colors">Start Free Audit</button>
         </div>
       </nav>
 
