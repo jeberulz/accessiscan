@@ -5,6 +5,10 @@ import Header from '@/components/Header';
 import AssessmentResults from '@/components/AssessmentResults';
 import type { AssessmentResult } from '@/shared/types';
 import Hero from '@/components/Hero';
+import { useToast } from '@/components/Toast';
+import AssessmentHistory from '@/components/AssessmentHistory';
+import BatchAssessment from '@/components/BatchAssessment';
+import BatchResults from '@/components/BatchResults';
 
 const AuditPreview = dynamic(() => import('@/components/AuditPreview'), {
   ssr: false,
@@ -23,16 +27,21 @@ const FooterCta = dynamic(() => import('@/components/FooterCta'), {
 });
 
 export default function Page() {
+  const { addToast } = useToast();
   const [assessment, setAssessment] = useState<AssessmentResult | null>(null);
   const [showForm, setShowForm] = useState(true);
   const [websiteUrl, setWebsiteUrl] = useState('');
   const [footerUrl, setFooterUrl] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
+  const [showBatchAssessment, setShowBatchAssessment] = useState(false);
+  const [batchResults, setBatchResults] = useState<AssessmentResult[] | null>(null);
 
 
 
   const handleNewAssessment = () => {
     setAssessment(null);
+    setBatchResults(null);
     setShowForm(true);
     setWebsiteUrl('');
     setFooterUrl('');
@@ -52,16 +61,62 @@ export default function Page() {
       if (json?.success) {
         setAssessment(json.data as AssessmentResult);
         setShowForm(false);
+        addToast('Assessment completed successfully!', 'success');
       } else {
-        alert(json?.message || 'Assessment failed');
+        addToast(json?.message || 'Assessment failed', 'error');
       }
     } catch (e) {
-      alert('Network error. Please try again.');
+      addToast('Network error. Please try again.', 'error');
     } finally {
       setLoading(false);
     }
   };
 
+  const handleImageScan = async (imageFile: string) => {
+    try {
+      setLoading(true);
+      const res = await fetch('/api/assess', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ assessmentType: 'image', imageFile }),
+      });
+      const json = await res.json();
+      if (json?.success) {
+        setAssessment(json.data as AssessmentResult);
+        setShowForm(false);
+        addToast('Assessment completed successfully!', 'success');
+      } else {
+        addToast(json?.message || 'Assessment failed', 'error');
+      }
+    } catch (e) {
+      addToast('Network error. Please try again.', 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleBatchComplete = (results: AssessmentResult[]) => {
+    setBatchResults(results);
+    setShowBatchAssessment(false);
+    setShowForm(false);
+    addToast(`Batch assessment completed! ${results.length} website${results.length !== 1 ? 's' : ''} assessed.`, 'success');
+  };
+
+  // Show batch results
+  if (batchResults && !showForm) {
+    return (
+      <BatchResults
+        results={batchResults}
+        onBack={handleNewAssessment}
+        onNewBatch={() => {
+          setBatchResults(null);
+          setShowBatchAssessment(true);
+        }}
+      />
+    );
+  }
+
+  // Show single assessment results
   if (assessment && !showForm) {
     return (
       <div className="min-h-screen bg-black text-slate-100 antialiased">
@@ -69,15 +124,32 @@ export default function Page() {
           <div className="absolute -top-16 -left-24 h-96 w-96 rounded-full bg-gradient-to-tr from-emerald-600/40 via-green-500/30 to-teal-400/20 blur-3xl"></div>
           <div className="absolute bottom-0 right-0 h-[28rem] w-[28rem] rounded-full bg-gradient-to-tr from-orange-600/30 via-red-600/20 to-emerald-500/20 blur-3xl"></div>
         </div>
-        <Header />
+        <Header 
+          onShowHistory={() => setShowHistory(true)} 
+          onShowBatch={() => setShowBatchAssessment(true)}
+        />
         <main className="relative z-10 pt-8 pb-16 px-4 sm:px-6 lg:px-8">
           <div className="mb-8 text-center">
-            <button
-              onClick={handleNewAssessment}
-              className="inline-flex items-center px-6 py-3 rounded-lg border border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 font-medium transition-colors"
-            >
-              ← Assess Another Website
-            </button>
+            <div className="flex flex-col sm:flex-row gap-3 justify-center">
+              <button
+                onClick={handleNewAssessment}
+                className="inline-flex items-center px-6 py-3 rounded-lg border border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 font-medium transition-colors"
+              >
+                ← Assess Another Website
+              </button>
+              <button
+                onClick={() => setShowHistory(true)}
+                className="inline-flex items-center px-6 py-3 rounded-lg border border-emerald-500/30 bg-emerald-600/10 text-emerald-300 hover:bg-emerald-600/20 font-medium transition-colors"
+              >
+                📊 View History
+              </button>
+              <button
+                onClick={() => setShowBatchAssessment(true)}
+                className="inline-flex items-center px-6 py-3 rounded-lg border border-blue-500/30 bg-blue-600/10 text-blue-300 hover:bg-blue-600/20 font-medium transition-colors"
+              >
+                🚀 Batch Assessment
+              </button>
+            </div>
           </div>
           {assessment && <AssessmentResults assessment={assessment} />}
         </main>
@@ -91,12 +163,17 @@ export default function Page() {
         <div className="absolute -top-16 -left-24 h-96 w-96 rounded-full bg-gradient-to-tr from-emerald-600/40 via-green-500/30 to-teal-400/20 blur-3xl"></div>
         <div className="absolute bottom-0 right-0 h-[28rem] w-[28rem] rounded-full bg-gradient-to-tr from-orange-600/30 via-red-600/20 to-emerald-500/20 blur-3xl"></div>
       </div>
-      <Header />
+      <Header 
+        onShowHistory={() => setShowHistory(true)} 
+        onShowBatch={() => setShowBatchAssessment(true)}
+      />
       <Hero
         websiteUrl={websiteUrl}
         setWebsiteUrl={setWebsiteUrl}
         loading={loading}
         onScan={() => handleScan('hero')}
+        onImageScan={handleImageScan}
+        onShowBatch={() => setShowBatchAssessment(true)}
       />
 
       <AuditPreview />
@@ -112,6 +189,27 @@ export default function Page() {
         loading={loading}
         onScanFooter={() => handleScan('footer')}
       />
+
+      {/* Assessment History Modal */}
+      {showHistory && (
+        <AssessmentHistory
+          onSelectAssessment={(selectedAssessment) => {
+            setAssessment(selectedAssessment);
+            setShowForm(false);
+            setShowHistory(false);
+            addToast('Assessment loaded from history', 'info');
+          }}
+          onClose={() => setShowHistory(false)}
+        />
+      )}
+
+      {/* Batch Assessment Modal */}
+      {showBatchAssessment && (
+        <BatchAssessment
+          onBatchComplete={handleBatchComplete}
+          onClose={() => setShowBatchAssessment(false)}
+        />
+      )}
       
     </div>
   );

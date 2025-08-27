@@ -1,5 +1,5 @@
 "use client";
-import { Sparkles, Search, Loader2, Link2, Image, Upload } from 'lucide-react';
+import { Sparkles, Search, Loader2, Link2, Image, Upload, Layers } from 'lucide-react';
 import { Dispatch, SetStateAction, useState } from 'react';
 
 type Props = {
@@ -7,15 +7,39 @@ type Props = {
   setWebsiteUrl: Dispatch<SetStateAction<string>>;
   loading: boolean;
   onScan: () => void;
+  onImageScan?: (imageFile: string) => void;
+  onShowBatch?: () => void;
 };
 
-export default function Hero({ websiteUrl, setWebsiteUrl, loading, onScan }: Props) {
+export default function Hero({ websiteUrl, setWebsiteUrl, loading, onScan, onImageScan, onShowBatch }: Props) {
   const [mode, setMode] = useState<'url' | 'image'>('url');
   const [selectedFileName, setSelectedFileName] = useState<string>("");
+  const [selectedImageFile, setSelectedImageFile] = useState<string>("");
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    setSelectedFileName(file ? file.name : "");
+    if (file) {
+      setSelectedFileName(file.name);
+      
+      // Convert file to base64
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const base64String = event.target?.result as string;
+        setSelectedImageFile(base64String);
+      };
+      reader.readAsDataURL(file);
+    } else {
+      setSelectedFileName("");
+      setSelectedImageFile("");
+    }
+  };
+
+  const handleScanClick = () => {
+    if (mode === 'image' && selectedImageFile && onImageScan) {
+      onImageScan(selectedImageFile);
+    } else if (mode === 'url') {
+      onScan();
+    }
   };
   return (
     <section className="relative z-10">
@@ -97,8 +121,8 @@ export default function Hero({ websiteUrl, setWebsiteUrl, loading, onScan }: Pro
               {/* Action */}
               <button
                 id="scanButton"
-                onClick={onScan}
-                disabled={loading || !websiteUrl.trim() || mode === 'image'}
+                onClick={handleScanClick}
+                disabled={loading || (mode === 'url' && !websiteUrl.trim()) || (mode === 'image' && !selectedImageFile)}
                 className="inline-flex gap-2 hover:bg-emerald-700 transition-colors whitespace-nowrap shrink-0 text-sm font-medium text-white font-geist bg-emerald-600 rounded-lg pt-2 pr-4 pb-2 pl-4 items-center disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
@@ -106,6 +130,19 @@ export default function Hero({ websiteUrl, setWebsiteUrl, loading, onScan }: Pro
               </button>
             </div>
           </div>
+
+          {/* Batch Assessment Link */}
+          {onShowBatch && (
+            <div className="mt-6 flex items-center justify-center">
+              <button
+                onClick={onShowBatch}
+                className="inline-flex items-center gap-2 text-sm text-slate-400 hover:text-slate-200 transition-colors"
+              >
+                <Layers className="h-4 w-4" />
+                Need to assess multiple websites? Try batch assessment
+              </button>
+            </div>
+          )}
 
           <div className="mt-6 flex items-center justify-center gap-3 text-sm text-slate-400">
             <div className="flex -space-x-2">

@@ -66,3 +66,4 @@ alter table public.leads enable row level security;
 -- create policy "server insert leads" on public.leads for insert to authenticated using (true) with check (true);
 -- create policy "server read leads" on public.leads for select to authenticated using (true);
 
+

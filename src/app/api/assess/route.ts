@@ -10,10 +10,59 @@ const RequestSchema = AssessmentRequestSchema;
 
 export async function POST(req: Request) {
   try {
-    const json = await req.json();
-    const parsed = RequestSchema.parse(json);
+    // Validate content type
+    const contentType = req.headers.get('content-type');
+    if (!contentType?.includes('application/json')) {
+      return new Response(JSON.stringify({ 
+        success: false, 
+        message: 'Content-Type must be application/json' 
+      }), { 
+        status: 400, 
+        headers: { 'content-type': 'application/json' } 
+      });
+    }
+
+    // Parse and validate request body
+    let json;
+    try {
+      json = await req.json();
+    } catch (error) {
+      return new Response(JSON.stringify({ 
+        success: false, 
+        message: 'Invalid JSON in request body' 
+      }), { 
+        status: 400, 
+        headers: { 'content-type': 'application/json' } 
+      });
+    }
+
+    // Validate against schema
+    let parsed;
+    try {
+      parsed = RequestSchema.parse(json);
+    } catch (error: any) {
+      return new Response(JSON.stringify({ 
+        success: false, 
+        message: 'Invalid request data', 
+        errors: error.errors 
+      }), { 
+        status: 400, 
+        headers: { 'content-type': 'application/json' } 
+      });
+    }
 
     const { websiteUrl, imageFile, assessmentType, email, companyName } = parsed;
+
+    // Check for required environment variables
+    if (!process.env.OPENAI_API_KEY) {
+      return new Response(JSON.stringify({ 
+        success: false, 
+        message: 'OpenAI API key not configured' 
+      }), { 
+        status: 500, 
+        headers: { 'content-type': 'application/json' } 
+      });
+    }
 
     const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
@@ -21,34 +70,60 @@ export async function POST(req: Request) {
     let analysisTarget = '';
     let screenshotUrl: string | undefined = undefined;
 
-    if (assessmentType === 'image') {
-      analysisTarget = 'uploaded screenshot';
-      completion = await openai.chat.completions.create({
-        model: 'gpt-4o',
-        messages: [
-          { role: 'system', content: getSystemPrompt('image') },
-          {
-            role: 'user',
-            content: [
-              { type: 'text', text: 'Analyze this screenshot for accessibility issues. Return a comprehensive assessment.' },
-              { type: 'image_url', image_url: { url: imageFile! } },
-            ],
-          },
-        ],
-        temperature: 0.2,
-        max_tokens: 3000,
-      });
-    } else {
-      analysisTarget = websiteUrl!;
-      screenshotUrl = await captureWebsiteScreenshot(websiteUrl!);
-      completion = await openai.chat.completions.create({
-        model: 'gpt-4o',
-        messages: [
-          { role: 'system', content: getSystemPrompt('url') },
-          { role: 'user', content: `Analyze this website URL for accessibility compliance: ${websiteUrl}` },
-        ],
-        temperature: 0.3,
-        max_tokens: 2500,
+    // Perform AI analysis with proper error handling
+    try {
+      if (assessmentType === 'image') {
+        analysisTarget = 'uploaded screenshot';
+        completion = await openai.chat.completions.create({
+          model: 'gpt-4o',
+          messages: [
+            { role: 'system', content: getSystemPrompt('image') },
+            {
+              role: 'user',
+              content: [
+                { type: 'text', text: 'Analyze this screenshot for accessibility issues. Return a comprehensive assessment.' },
+                { type: 'image_url', image_url: { url: imageFile! } },
+              ],
+            },
+          ],
+          temperature: 0.2,
+          max_tokens: 3000,
+        });
+      } else {
+        analysisTarget = websiteUrl!;
+        try {
+          screenshotUrl = await captureWebsiteScreenshot(websiteUrl!);
+        } catch (screenshotError) {
+          console.warn('Screenshot capture failed:', screenshotError);
+          // Continue without screenshot - it's not critical
+        }
+        
+        completion = await openai.chat.completions.create({
+          model: 'gpt-4o',
+          messages: [
+            { role: 'system', content: getSystemPrompt('url') },
+            { role: 'user', content: `Analyze this website URL for accessibility compliance: ${websiteUrl}` },
+          ],
+          temperature: 0.3,
+          max_tokens: 2500,
+        });
+      }
+    } catch (aiError: any) {
+      console.error('OpenAI API error:', aiError);
+      
+      let errorMessage = 'Failed to analyze content';
+      if (aiError?.error?.message) {
+        errorMessage = `AI analysis failed: ${aiError.error.message}`;
+      } else if (aiError?.message) {
+        errorMessage = `AI analysis failed: ${aiError.message}`;
+      }
+      
+      return new Response(JSON.stringify({ 
+        success: false, 
+        message: errorMessage 
+      }), { 
+        status: 500, 
+        headers: { 'content-type': 'application/json' } 
       });
     }
 
@@ -161,4 +236,5 @@ export async function POST(req: Request) {
     return new Response(JSON.stringify(response), { status: 500, headers: { 'content-type': 'application/json' } });
   }
 }
+
 
