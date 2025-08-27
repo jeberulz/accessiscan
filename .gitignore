@@ -3,3 +3,9 @@ node_modules/
 .wrangler/
 .dev.vars
 worker-configuration.d.ts
+# Ignore env files
+.env
+.env.local
+.env.production
+.env.development
+.env.test
