@@ -105,3 +105,213 @@ Artifacts:
 - Supabase persistence verified.
 - 1:1 visual parity screenshots captured.
 - No TypeScript errors, no console errors in browser.
+
+---
+
+## AI Issue Detection Enhancement Plan
+
+### Problem Analysis
+Current AI returns only 1-2 issues per assessment, far below what human auditors find (15-25+ issues). Root causes:
+
+1. **Limited Input Data**: AI only receives URL string or screenshot, no HTML source/DOM structure
+2. **Generic Prompting**: Asks for "top findings" vs comprehensive scan
+3. **No Specific Evidence**: Missing actual file names, selectors, element details
+4. **Token Constraints**: 2500-3000 token limit encourages brevity over thoroughness
+5. **Heuristic vs Detailed**: Positioned as "screening" rather than comprehensive audit
+
+### Implementation Phases
+
+#### Phase 1: Data Enrichment (Critical - Week 1)
+**Objective**: Provide AI with detailed, structured data for comprehensive analysis
+
+**Tasks:**
+1. **HTML Source Extraction**
+   - Add Puppeteer/Playwright dependency
+   - Create `src/lib/crawler.ts` for full DOM extraction
+   - Extract: HTML source, computed styles, accessibility tree
+   - Include meta info (title, lang, viewport)
+
+2. **Image Inventory System**
+   ```typescript
+   interface ImageAnalysis {
+     src: string;
+     alt?: string;
+     selector: string;
+     dimensions: { width: number; height: number };
+     isDecorative: boolean;
+     hasEmptyAlt: boolean;
+   }
+   ```
+
+3. **Enhanced Screenshot Analysis**
+   - Multiple viewports: desktop (1920x1080), mobile (375x667)
+   - Element overlay with bounding boxes
+   - High-contrast mode screenshots
+
+4. **Prompt Overhaul**
+   - Replace "top findings" with "comprehensive scan"
+   - Add mandatory minimums: 15+ issues across all POUR categories
+   - Demand specific evidence: exact selectors, file names, line numbers
+   - Increase token limits to 4000-5000
+
+**Acceptance Criteria:**
+- AI receives structured HTML data with element inventories
+- Minimum 15 issues returned per assessment
+- Each issue includes specific file names/selectors
+- All 4 POUR categories covered
+
+#### Phase 2: Systematic Issue Detection (High - Week 2)
+**Objective**: Implement comprehensive checks for each accessibility category
+
+**Tasks:**
+1. **Form Analysis Deep-dive**
+   ```typescript
+   interface FormAnalysis {
+     unlabeledInputs: ElementInfo[];
+     missingFieldsets: ElementInfo[];
+     noErrorAssociation: ElementInfo[];
+     missingRequired: ElementInfo[];
+     poorInstructions: ElementInfo[];
+   }
+   ```
+
+2. **Color Contrast Computation**
+   - Extract all text/background combinations
+   - Calculate actual contrast ratios
+   - Include hover/focus states
+   - Test disabled elements
+
+3. **Heading Hierarchy Analysis**
+   - Complete h1-h6 structure extraction
+   - Identify gaps and improper nesting
+   - Check for missing h1 or multiple h1s
+
+4. **Link Analysis**
+   - Extract all `<a>` elements with text content
+   - Identify generic text ("click here", "read more")
+   - Check for empty links or missing href
+
+**Acceptance Criteria:**
+- Specific file names in image alt text issues
+- Exact contrast ratios for color issues  
+- Complete form field inventory with missing labels
+- Detailed heading structure analysis
+
+#### Phase 3: Advanced Detection (Medium - Week 3)
+**Objective**: Add sophisticated accessibility checks
+
+**Tasks:**
+1. **Accessibility Tree Extraction**
+   - Use browser accessibility APIs
+   - Extract ARIA attributes and computed names
+   - Identify focus order issues
+   - Validate ARIA usage correctness
+
+2. **Interactive Element Analysis**
+   - Map all focusable elements
+   - Check for visible focus indicators
+   - Verify keyboard accessibility
+   - Validate touch target sizes (44px minimum)
+
+3. **Content Structure Analysis**
+   - Landmark usage (nav, main, aside, etc.)
+   - Skip link implementation
+   - Page language detection
+   - Content reading order
+
+**Acceptance Criteria:**
+- ARIA validation with specific attribute issues
+- Focus order problems with element paths
+- Touch target size violations with coordinates
+- Semantic structure gaps identified
+
+#### Phase 4: Quality Assurance & Validation (Week 4)
+**Objective**: Ensure consistent, high-quality issue detection
+
+**Tasks:**
+1. **Issue Count Validation**
+   ```typescript
+   const validateIssueCount = (issues: Issue[]) => {
+     const minimums = {
+       perceivable: 5,
+       operable: 4, 
+       understandable: 3,
+       robust: 3
+     };
+     // Add synthetic issues if below threshold
+   };
+   ```
+
+2. **Evidence Quality Assurance**
+   - Validate selectors point to real elements
+   - Ensure file names/URLs exist
+   - Check recommendation actionability
+   - Verify WCAG reference accuracy
+
+3. **Issue Grouping & Prioritization**
+   - Group similar issues (e.g., "8 images missing alt text")
+   - Calculate realistic priority scores
+   - Provide implementation time estimates
+   - Suggest fix order based on impact/effort
+
+**Acceptance Criteria:**
+- Every assessment returns 15-25+ issues
+- All issues have specific evidence and selectors
+- Issues grouped by type with instance counts
+- Realistic priority scores and time estimates
+
+### Technical Implementation Details
+
+#### New Data Pipeline Architecture
+```typescript
+interface EnrichedAnalysisData {
+  url: string;
+  htmlSource: string;
+  pageMetadata: {
+    title: string;
+    lang?: string;
+    viewport?: string;
+  };
+  images: ImageAnalysis[];
+  forms: FormAnalysis;
+  headings: HeadingInfo[];
+  links: LinkInfo[];
+  colors: ColorAnalysis[];
+  interactiveElements: InteractiveElementInfo[];
+  accessibilityTree: AccessibilityNode[];
+}
+```
+
+#### Enhanced API Flow
+1. **URL Analysis Path**:
+   - Crawl with Puppeteer → Extract structured data → Send to AI
+   - Include HTML snippets for each element type
+   - Provide computed styles for color analysis
+
+2. **Image Analysis Path**:
+   - Multiple screenshot modes → Element detection → Send with coordinates
+   - Include DOM overlay data when available
+
+#### File Structure Updates
+```
+src/lib/
+├── crawler.ts          # Puppeteer-based data extraction
+├── accessibility-analyzer.ts  # Structured issue detection
+├── color-contrast.ts   # Color analysis utilities
+├── element-extractor.ts # DOM element parsing
+└── issue-validator.ts  # Quality assurance checks
+```
+
+### Success Metrics
+- **Quantity**: 15-25+ issues per assessment (up from 1-2)
+- **Specificity**: 100% of issues include exact selectors/file names
+- **Coverage**: All 4 POUR categories represented
+- **Accuracy**: Issues validated against actual DOM elements
+- **Actionability**: Clear, specific remediation steps provided
+
+### Risk Mitigation
+- **Performance**: Implement caching for crawled data
+- **Rate Limits**: Add request throttling for Puppeteer
+- **Token Limits**: Chunk large HTML sources if needed
+- **Accuracy**: Validate extracted data against real DOM
+- **Fallbacks**: Maintain current system as backup if new system fails

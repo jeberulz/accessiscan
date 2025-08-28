@@ -37,6 +37,8 @@ export default function AssessmentResults({ assessment }: AssessmentResultsProps
   const [showLeadModal, setShowLeadModal] = useState(false);
   const [selectedIssue, setSelectedIssue] = useState(0);
   const [exportLoading, setExportLoading] = useState<string | null>(null);
+  const [categoryPage, setCategoryPage] = useState(0);
+  const pageSize = 5;
 
   const getScoreColor = (score: number) => {
     if (score >= 80) return 'text-emerald-400';
@@ -109,6 +111,36 @@ export default function AssessmentResults({ assessment }: AssessmentResultsProps
     }
   };
 
+  // Derive categories list. Prefer server-provided categories; else group by category/type.
+  const derivedCategories = (() => {
+    if (assessment.issueCategories && assessment.issueCategories.length > 0) {
+      return assessment.issueCategories.map(c => ({
+        name: c.name,
+        impact: c.impact || 'medium',
+        count: c.count,
+        indices: c.indices || [],
+      }));
+    }
+    const map = new Map<string, { name: string; impact: 'critical'|'high'|'medium'|'low'; indices: number[] }>();
+    assessment.issues.forEach((iss, idx) => {
+      const key = (iss as any).category || iss.type;
+      const entry = map.get(key) || { name: key, impact: iss.impact, indices: [] as number[] };
+      entry.indices.push(idx);
+      const order: any = { critical: 3, high: 2, medium: 1, low: 0 };
+      if (order[iss.impact] > order[entry.impact]) entry.impact = iss.impact;
+      map.set(key, entry);
+    });
+    return Array.from(map.values()).map(v => ({ name: v.name, impact: v.impact, count: v.indices.length, indices: v.indices }));
+  })();
+
+  const totalCategoryPages = Math.max(1, Math.ceil(derivedCategories.length / pageSize));
+  const pagedCategories = derivedCategories.slice(categoryPage * pageSize, categoryPage * pageSize + pageSize);
+
+  const goPrev = () => setCategoryPage(p => Math.max(0, p - 1));
+  const goNext = () => setCategoryPage(p => Math.min(totalCategoryPages - 1, p + 1));
+
+  const potentialScore = assessment.potentialScore ?? 89;
+
   return (
     <div className="-mb-8 max-w-7xl md:px-6 mr-auto ml-auto pr-4 pl-4">
       <div className="relative w-full overflow-hidden shadow-black/50 bg-gradient-to-b from-white/[0.04] to-white/[0.02] border-white/10 border rounded-2xl mr-auto ml-auto shadow-2xl backdrop-blur-xl">
@@ -170,84 +202,137 @@ export default function AssessmentResults({ assessment }: AssessmentResultsProps
             </div>
 
             <div className="space-y-2">
-              {/* Critical Issues */}
-              {criticalIssues.length > 0 && (
-                <div className="rounded-lg bg-red-500/10 border border-red-500/20 p-3">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm font-medium text-red-300">Critical</span>
-                    <span className="rounded-md bg-red-500/20 px-2 py-0.5 text-xs text-red-300">{criticalIssues.length}</span>
-                  </div>
-                  <div className="space-y-1 text-xs">
-                    {criticalIssues.slice(0, 2).map((issue, index) => (
-                      <div key={index} className="flex items-center gap-2 cursor-pointer hover:bg-red-500/5 rounded p-1" 
-                           onClick={() => setSelectedIssue(assessment.issues.indexOf(issue))}>
-                        <EyeOff className="h-3 w-3 text-red-400" />
-                        <span className="text-red-200 truncate">{issue.type}</span>
-                        <span className="ml-auto text-red-300">1</span>
-                      </div>
-                    ))}
-                  </div>
+              {/* Pagination controls when categories exceed 5 */}
+              {derivedCategories.length > pageSize && (
+                <div className="flex items-center justify-between text-[11px] text-slate-300 mb-1">
+                  <button onClick={goPrev} disabled={categoryPage === 0} className="px-2 py-0.5 rounded border border-white/10 disabled:opacity-50">Prev</button>
+                  <span className="opacity-80">Page {categoryPage + 1} / {totalCategoryPages}</span>
+                  <button onClick={goNext} disabled={categoryPage >= totalCategoryPages - 1} className="px-2 py-0.5 rounded border border-white/10 disabled:opacity-50">Next</button>
                 </div>
               )}
 
-              {/* High Impact Issues */}
-              {highIssues.length > 0 && (
-                <div className="rounded-lg bg-orange-500/10 border border-orange-500/20 p-3">
+              {/* Render category cards */}
+              {pagedCategories.map((cat, groupIdx) => (
+                <div key={`${cat.name}-${groupIdx}`} className={`rounded-lg p-3 border ${
+                  cat.impact === 'critical' ? 'bg-red-500/10 border-red-500/20' :
+                  cat.impact === 'high' ? 'bg-orange-500/10 border-orange-500/20' :
+                  cat.impact === 'medium' ? 'bg-amber-500/10 border-amber-500/20' :
+                  'bg-emerald-500/10 border-emerald-500/20'
+                }`}>
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm font-medium text-orange-300">High</span>
-                    <span className="rounded-md bg-orange-500/20 px-2 py-0.5 text-xs text-orange-300">{highIssues.length}</span>
+                    <span className={`text-sm font-medium ${
+                      cat.impact === 'critical' ? 'text-red-300' :
+                      cat.impact === 'high' ? 'text-orange-300' :
+                      cat.impact === 'medium' ? 'text-amber-300' : 'text-emerald-300'
+                    }`}>{cat.name}</span>
+                    <span className={`rounded-md px-2 py-0.5 text-xs ${
+                      cat.impact === 'critical' ? 'bg-red-500/20 text-red-300' :
+                      cat.impact === 'high' ? 'bg-orange-500/20 text-orange-300' :
+                      cat.impact === 'medium' ? 'bg-amber-500/20 text-amber-300' : 'bg-emerald-500/20 text-emerald-300'
+                    }`}>{cat.count}</span>
                   </div>
                   <div className="space-y-1 text-xs">
-                    {highIssues.slice(0, 2).map((issue, index) => (
-                      <div key={index} className="flex items-center gap-2 cursor-pointer hover:bg-orange-500/5 rounded p-1"
-                           onClick={() => setSelectedIssue(assessment.issues.indexOf(issue))}>
-                        <Contrast className="h-3 w-3 text-orange-400" />
-                        <span className="text-orange-200 truncate">{issue.type}</span>
-                        <span className="ml-auto text-orange-300">1</span>
-                      </div>
-                    ))}
+                    {(cat.indices.slice(0, 2)).map((issueIndex, index) => {
+                      const issue = assessment.issues[issueIndex];
+                      return (
+                        <div key={`${issueIndex}-${index}`} className="flex items-center gap-2 cursor-pointer hover:bg-white/5 rounded p-1" 
+                             onClick={() => setSelectedIssue(issueIndex)}>
+                          {issue.impact === 'critical' ? (
+                            <EyeOff className="h-3 w-3 text-red-400" />
+                          ) : issue.impact === 'high' ? (
+                            <Contrast className="h-3 w-3 text-orange-400" />
+                          ) : issue.impact === 'medium' ? (
+                            <MousePointer className="h-3 w-3 text-amber-400" />
+                          ) : (
+                            <Tag className="h-3 w-3 text-emerald-400" />
+                          )}
+                          <span className="text-slate-200 truncate">{issue.title || issue.type}</span>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
-              )}
+              ))}
 
-              {/* Medium Impact Issues */}
-              {mediumIssues.length > 0 && (
-                <div className="rounded-lg bg-amber-500/10 border border-amber-500/20 p-3">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm font-medium text-amber-300">Moderate</span>
-                    <span className="rounded-md bg-amber-500/20 px-2 py-0.5 text-xs text-amber-300">{mediumIssues.length}</span>
-                  </div>
-                  <div className="space-y-1 text-xs">
-                    {mediumIssues.slice(0, 2).map((issue, index) => (
-                      <div key={index} className="flex items-center gap-2 cursor-pointer hover:bg-amber-500/5 rounded p-1"
-                           onClick={() => setSelectedIssue(assessment.issues.indexOf(issue))}>
-                        <MousePointer className="h-3 w-3 text-amber-400" />
-                        <span className="text-amber-200 truncate">{issue.type}</span>
-                        <span className="ml-auto text-amber-300">1</span>
+              {/* Original impact sections remain when categories <=5 */}
+              {derivedCategories.length === 0 && (
+                <>
+                  {criticalIssues.length > 0 && (
+                    <div className="rounded-lg bg-red-500/10 border border-red-500/20 p-3">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-sm font-medium text-red-300">Critical</span>
+                        <span className="rounded-md bg-red-500/20 px-2 py-0.5 text-xs text-red-300">{criticalIssues.length}</span>
                       </div>
-                    ))}
-                  </div>
-                </div>
-              )}
+                      <div className="space-y-1 text-xs">
+                        {criticalIssues.slice(0, 2).map((issue, index) => (
+                          <div key={index} className="flex items-center gap-2 cursor-pointer hover:bg-red-500/5 rounded p-1" 
+                               onClick={() => setSelectedIssue(assessment.issues.indexOf(issue))}>
+                            <EyeOff className="h-3 w-3 text-red-400" />
+                            <span className="text-red-200 truncate">{issue.type}</span>
+                            <span className="ml-auto text-red-300">1</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
-              {/* Low Impact Issues */}
-              {lowIssues.length > 0 && (
-                <div className="rounded-lg bg-emerald-500/10 border border-emerald-500/20 p-3">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm font-medium text-emerald-300">Minor</span>
-                    <span className="rounded-md bg-emerald-500/20 px-2 py-0.5 text-xs text-emerald-300">{lowIssues.length}</span>
-                  </div>
-                  <div className="space-y-1 text-xs">
-                    {lowIssues.slice(0, 2).map((issue, index) => (
-                      <div key={index} className="flex items-center gap-2 cursor-pointer hover:bg-emerald-500/5 rounded p-1"
-                           onClick={() => setSelectedIssue(assessment.issues.indexOf(issue))}>
-                        <Tag className="h-3 w-3 text-emerald-400" />
-                        <span className="text-emerald-200 truncate">{issue.type}</span>
-                        <span className="ml-auto text-emerald-300">1</span>
+                  {highIssues.length > 0 && (
+                    <div className="rounded-lg bg-orange-500/10 border border-orange-500/20 p-3">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-sm font-medium text-orange-300">High</span>
+                        <span className="rounded-md bg-orange-500/20 px-2 py-0.5 text-xs text-orange-300">{highIssues.length}</span>
                       </div>
-                    ))}
-                  </div>
-                </div>
+                      <div className="space-y-1 text-xs">
+                        {highIssues.slice(0, 2).map((issue, index) => (
+                          <div key={index} className="flex items-center gap-2 cursor-pointer hover:bg-orange-500/5 rounded p-1"
+                               onClick={() => setSelectedIssue(assessment.issues.indexOf(issue))}>
+                            <Contrast className="h-3 w-3 text-orange-400" />
+                            <span className="text-orange-200 truncate">{issue.type}</span>
+                            <span className="ml-auto text-orange-300">1</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {mediumIssues.length > 0 && (
+                    <div className="rounded-lg bg-amber-500/10 border border-amber-500/20 p-3">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-sm font-medium text-amber-300">Moderate</span>
+                        <span className="rounded-md bg-amber-500/20 px-2 py-0.5 text-xs text-amber-300">{mediumIssues.length}</span>
+                      </div>
+                      <div className="space-y-1 text-xs">
+                        {mediumIssues.slice(0, 2).map((issue, index) => (
+                          <div key={index} className="flex items-center gap-2 cursor-pointer hover:bg-amber-500/5 rounded p-1"
+                               onClick={() => setSelectedIssue(assessment.issues.indexOf(issue))}>
+                            <MousePointer className="h-3 w-3 text-amber-400" />
+                            <span className="text-amber-200 truncate">{issue.type}</span>
+                            <span className="ml-auto text-amber-300">1</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {lowIssues.length > 0 && (
+                    <div className="rounded-lg bg-emerald-500/10 border border-emerald-500/20 p-3">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-sm font-medium text-emerald-300">Minor</span>
+                        <span className="rounded-md bg-emerald-500/20 px-2 py-0.5 text-xs text-emerald-300">{lowIssues.length}</span>
+                      </div>
+                      <div className="space-y-1 text-xs">
+                        {lowIssues.slice(0, 2).map((issue, index) => (
+                          <div key={index} className="flex items-center gap-2 cursor-pointer hover:bg-emerald-500/5 rounded p-1"
+                               onClick={() => setSelectedIssue(assessment.issues.indexOf(issue))}>
+                            <Tag className="h-3 w-3 text-emerald-400" />
+                            <span className="text-emerald-200 truncate">{issue.type}</span>
+                            <span className="ml-auto text-emerald-300">1</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           </aside>
@@ -272,13 +357,54 @@ export default function AssessmentResults({ assessment }: AssessmentResultsProps
                       {getImpactIcon(currentIssue.impact)}
                     </div>
                     <div className="flex-1">
-                      <h3 className="text-lg font-medium text-white mb-2">{currentIssue.type}</h3>
+                      <h3 className="text-lg font-medium text-white mb-2">{currentIssue.title || currentIssue.type}</h3>
                       <p className="text-sm text-slate-300 mb-4">{currentIssue.description}</p>
-                      
+                      {currentIssue.userImpact && (
+                        <p className="text-[13px] text-slate-300/90 mb-3">{currentIssue.userImpact}</p>
+                      )}
+                      {(currentIssue.wcagRefs && currentIssue.wcagRefs.length > 0) && (
+                        <div className="text-[11px] text-slate-300/90 mb-3">WCAG: {currentIssue.wcagRefs.join(', ')}</div>
+                      )}
+                      {typeof (currentIssue.confidence) === 'number' && (
+                        <div className="text-[11px] text-slate-400 mb-2">Confidence: {(currentIssue.confidence * 100).toFixed(0)}%</div>
+                      )}
+                      {typeof (currentIssue.priorityScore) === 'number' && (
+                        <div className="text-[11px] text-slate-300 mb-2">Priority Score: {currentIssue.priorityScore}</div>
+                      )}
+                      {currentIssue.timeEstimate && (
+                        <div className="text-[11px] text-slate-300 mb-3">Estimated time: {currentIssue.timeEstimate}</div>
+                      )}
+                      {(currentIssue.codeExample?.bad || currentIssue.codeExample?.good) && (
+                        <div className="bg-black/40 rounded-lg p-3 mb-4 border border-white/10">
+                          <div className="text-xs text-slate-400 mb-2">Code example:</div>
+                          <div className="grid grid-cols-1 gap-3 text-xs text-slate-300">
+                            {currentIssue.codeExample?.bad && (
+                              <div>
+                                <div className="text-[11px] text-red-300 mb-1">Before</div>
+                                <pre className="whitespace-pre-wrap break-words">{currentIssue.codeExample.bad}</pre>
+                              </div>
+                            )}
+                            {currentIssue.codeExample?.good && (
+                              <div>
+                                <div className="text-[11px] text-emerald-300 mb-1">After</div>
+                                <pre className="whitespace-pre-wrap break-words">{currentIssue.codeExample.good}</pre>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
                       <div className="bg-black/40 rounded-lg p-3 mb-4 border border-white/10">
                         <div className="text-xs text-slate-400 mb-2">Recommendation:</div>
                         <div className="text-xs text-slate-300">
-                          {currentIssue.recommendation}
+                          {currentIssue.remediationSteps && currentIssue.remediationSteps.length > 0 ? (
+                            <ul className="list-disc ml-5 space-y-1">
+                              {currentIssue.remediationSteps.map((s, i) => (
+                                <li key={i} className="marker:text-slate-500">{s}</li>
+                              ))}
+                            </ul>
+                          ) : (
+                            currentIssue.recommendation
+                          )}
                         </div>
                       </div>
 
@@ -289,16 +415,18 @@ export default function AssessmentResults({ assessment }: AssessmentResultsProps
                           currentIssue.impact === 'medium' ? 'bg-amber-500/10 text-amber-300' : 'bg-emerald-500/10 text-emerald-300'
                         }`}>
                           <Users className="h-3 w-3" />
-                          Affects users with disabilities
+                          {currentIssue.userImpact || 'Affects users with disabilities'}
                         </span>
                         <span className="inline-flex items-center gap-1 rounded-md bg-amber-500/10 px-2 py-1 text-xs text-amber-300">
                           <Gavel className="h-3 w-3" />
                           {currentIssue.wcagLevel}
                         </span>
-                        <span className="inline-flex items-center gap-1 rounded-md bg-blue-500/10 px-2 py-1 text-xs text-blue-300">
-                          <Clock className="h-3 w-3" />
-                          Quick fix
-                        </span>
+                        {currentIssue.quickFix && (
+                          <span className="inline-flex items-center gap-1 rounded-md bg-blue-500/10 px-2 py-1 text-xs text-blue-300">
+                            <Clock className="h-3 w-3" />
+                            Quick fix
+                          </span>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -374,13 +502,21 @@ export default function AssessmentResults({ assessment }: AssessmentResultsProps
                   </div>
                   <div className="flex items-center justify-between text-xs">
                     <span className="text-slate-300">Potential Score</span>
-                    <span className="text-emerald-400 font-medium">89/100</span>
+                    <span className="text-emerald-400 font-medium">{potentialScore}/100</span>
                   </div>
                   <div className="w-full bg-gray-700 rounded-full h-1">
-                    <div className="bg-emerald-500 h-1 rounded-full" style={{width: '89%'}}></div>
+                    <div className="bg-emerald-500 h-1 rounded-full" style={{width: `${Math.min(100, potentialScore)}%`}}></div>
                   </div>
                 </div>
               </div>
+
+              {/* Collapsible AI summary (exports/print only) */}
+              {assessment.aiDetailedResponse && (
+                <details className="hidden print:block bg-white/5 rounded-lg p-3">
+                  <summary className="text-sm font-medium text-white cursor-pointer">AI Summary</summary>
+                  <div className="mt-2 text-xs whitespace-pre-wrap text-slate-300">{assessment.aiDetailedResponse}</div>
+                </details>
+              )}
 
               {assessment.quickWins && assessment.quickWins.length > 0 && (
                 <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-lg p-3">

@@ -29,6 +29,38 @@ export const AccessibilityIssueSchema = z.object({
   wcagLevel: z.string(),
   element: z.string().optional(),
   recommendation: z.string(),
+  // Rich optional fields for detailed rendering
+  id: z.union([z.number(), z.string()]).optional(),
+  category: z.string().optional(),
+  title: z.string().optional(),
+  userImpact: z.string().optional(),
+  wcagRefs: z.array(z.string()).optional(),
+  instances: z.number().optional(),
+  selectors: z.array(z.string()).optional(),
+  evidence: z.object({
+    snippets: z.array(z.string()).optional(),
+  }).optional(),
+  codeExample: z.object({
+    bad: z.string().optional(),
+    good: z.string().optional(),
+  }).optional(),
+  remediationSteps: z.array(z.string()).optional(),
+  timeEstimate: z.string().optional(),
+  severity: z.number().optional(),
+  reach: z.number().optional(),
+  frequency: z.number().optional(),
+  impactScore: z.number().optional(),
+  effort: z.number().optional(),
+  priorityScore: z.number().optional(),
+  confidence: z.number().optional(),
+  quickFix: z.boolean().optional(),
+  previewHighlights: z.array(z.object({
+    x: z.number(),
+    y: z.number(),
+    w: z.number(),
+    h: z.number(),
+    note: z.string().optional(),
+  })).optional(),
 });
 
 export type AccessibilityIssue = z.infer<typeof AccessibilityIssueSchema>;
@@ -59,8 +91,21 @@ export const AssessmentResultSchema = z.object({
     impact: z.string(),
     effort: z.string(),
     eta: z.string(),
+    steps: z.array(z.string()).optional(),
   })).optional(),
   screenshotUrl: z.string().optional(),
+  // Rich optional metadata
+  potentialScore: z.number().optional(),
+  issueCategories: z.array(z.object({
+    name: z.string(),
+    impact: z.enum(['critical', 'high', 'medium', 'low']).optional(),
+    count: z.number(),
+    indices: z.array(z.number()).default([]),
+  })).optional(),
+  businessImpact: z.object({
+    usersAffectedPercent: z.number().optional(),
+    legalRiskNote: z.string().optional(),
+  }).optional(),
 });
 
 export type AssessmentResult = z.infer<typeof AssessmentResultSchema>;
