@@ -4,6 +4,38 @@
 
 AccessiScan is an AI-powered web accessibility assessment tool that scans websites for WCAG compliance issues and provides detailed reports with remediation guidance.
 
+## UI Design System – Visual Consistency (Authoritative)
+
+- Typography scale (Tailwind classes):
+  - Headings: `text-3xl` (page), `text-2xl` (section), `text-lg` (card/title)
+  - Body: `text-slate-300` default; small: `text-sm`; micro: `text-xs`
+  - Use `font-medium` for emphasis, `font-bold` for primary numbers/titles only
+- Icons: Use `lucide-react` exclusively. No emojis in UI labels, buttons, or badges
+  - Common mappings: Close=`X`, Tip=`Lightbulb`, Warning=`AlertTriangle`, Success=`CheckCircle`, Error=`XCircle`, History=`History` or `BarChart3`, Batch/Launch=`Rocket`
+  - Icon sizes: 12–16px for inline (`h-3 w-3`/`h-4 w-4`), 20–24px for feature icons
+- Color/Theme: Dark UI with translucent surfaces
+  - Surfaces: `bg-white/5` with `border border-white/10` on cards; hover `bg-white/10`
+  - Accents: Emerald for positive, Red for critical, Amber/Orange for warnings
+  - Text: Title `text-white`, secondary `text-slate-300`, meta `text-slate-400`
+- Buttons:
+  - Primary: `bg-emerald-600 text-white hover:bg-emerald-700`
+  - Secondary: `bg-white/5 text-slate-200 border border-white/10 hover:bg-white/10`
+  - Destructive: `bg-red-600 text-white hover:bg-red-700`
+  - Shape: rounded-lg or rounded-xl consistently; padding `px-4/6 py-2/3`
+- Cards/Sections:
+  - Use gradient/backdrop sparingly (`bg-gradient-to-b from-white/[0.04] to-white/[0.02]`)
+  - Consistent spacing: card padding `p-4/6`, grid gaps `gap-4/6`
+- Badges/Chips:
+  - Use icon + label chips; avoid emoji. Example: `Lightbulb` + "Pro Tip"
+  - Critical: `bg-red-500/10 border-red-500/20 text-red-300`
+  - Info: `bg-blue-500/10 border-blue-500/20 text-blue-300`
+- Do/Don't:
+  - Do standardize to `AuditPreview.tsx` visual hierarchy for headings, chips, and metric blocks
+  - Don't use emojis (e.g., 📊, 🚀, 💡, ✅, ❌) in any UI text. Use Lucide icons
+  - Keep numbers prominent with color-coded score scales
+
+This section is the source of truth for new components and refactors.
+
 ### Current Architecture
 - **Frontend**: Next.js 14 with TypeScript and Tailwind CSS
 - **Backend**: Next.js API routes with OpenAI GPT-4o integration

@@ -211,7 +211,7 @@ Current AI returns only 1-2 issues per assessment, far below what human auditors
    - Map all focusable elements
    - Check for visible focus indicators
    - Verify keyboard accessibility
-   - Validate touch target sizes (44px minimum)
+   - Validate interactive target sizes (24×24 CSS px minimum per WCAG 2.2). Exceptions apply (e.g., icon-only controls when an equivalent accessible mechanism or sufficient spacing is provided, and cases where increasing target size would break layout). Measure using CSS pixels and test keyboard/touch equivalence as part of verification.
 
 3. **Content Structure Analysis**
    - Landmark usage (nav, main, aside, etc.)

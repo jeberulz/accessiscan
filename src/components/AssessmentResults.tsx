@@ -520,7 +520,7 @@ export default function AssessmentResults({ assessment }: AssessmentResultsProps
 
               {assessment.quickWins && assessment.quickWins.length > 0 && (
                 <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-lg p-3">
-                  <div className="text-xs text-emerald-300 mb-2">💡 Pro Tip</div>
+                  <div className="text-xs text-emerald-300 mb-2 inline-flex items-center gap-1"><Lightbulb className="h-3 w-3" /> Pro Tip</div>
                   <p className="text-xs text-emerald-200">{assessment.quickWins[0]?.impact || "Fixing the top 3 issues will improve accessibility significantly and reduce legal risk."}</p>
                 </div>
               )}

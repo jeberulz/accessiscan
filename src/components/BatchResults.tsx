@@ -1,7 +1,7 @@
 "use client";
 import { useState } from 'react';
 import { AssessmentResult } from '@/shared/types';
-import { ChevronDown, ChevronRight, Globe, AlertTriangle, CheckCircle, Download, ArrowLeft, Filter } from 'lucide-react';
+import { ChevronDown, ChevronRight, Globe, AlertTriangle, CheckCircle, ArrowLeft, Filter, Rocket } from 'lucide-react';
 import AssessmentResults from './AssessmentResults';
 
 interface BatchResultsProps {
@@ -112,7 +112,10 @@ export default function BatchResults({ results, onBack, onNewBatch }: BatchResul
         <div className="max-w-6xl mx-auto">
           {/* Header */}
           <div className="text-center mb-8">
-            <h1 className="text-3xl font-bold text-white mb-4">Batch Assessment Results</h1>
+            <div className="flex items-center justify-center gap-3 mb-4">
+              <Rocket className="h-6 w-6 text-emerald-400" />
+              <h1 className="text-2xl font-bold text-white">Batch Assessment Results</h1>
+            </div>
             <p className="text-lg text-slate-300">
               Completed assessment of {results.length} website{results.length !== 1 ? 's' : ''} • Showing {filteredResults.length} result{filteredResults.length !== 1 ? 's' : ''}
             </p>

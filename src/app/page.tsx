@@ -9,6 +9,7 @@ import { useToast } from '@/components/Toast';
 import AssessmentHistory from '@/components/AssessmentHistory';
 import BatchAssessment from '@/components/BatchAssessment';
 import BatchResults from '@/components/BatchResults';
+import { ArrowLeft, History, Rocket } from 'lucide-react';
 
 const AuditPreview = dynamic(() => import('@/components/AuditPreview'), {
   ssr: false,
@@ -135,19 +136,22 @@ export default function Page() {
                 onClick={handleNewAssessment}
                 className="inline-flex items-center px-6 py-3 rounded-lg border border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 font-medium transition-colors"
               >
-                ← Assess Another Website
+                <ArrowLeft className="h-4 w-4 mr-2" />
+                Assess Another Website
               </button>
               <button
                 onClick={() => setShowHistory(true)}
                 className="inline-flex items-center px-6 py-3 rounded-lg border border-emerald-500/30 bg-emerald-600/10 text-emerald-300 hover:bg-emerald-600/20 font-medium transition-colors"
               >
-                📊 View History
+                <History className="h-4 w-4 mr-2" />
+                View History
               </button>
               <button
                 onClick={() => setShowBatchAssessment(true)}
                 className="inline-flex items-center px-6 py-3 rounded-lg border border-blue-500/30 bg-blue-600/10 text-blue-300 hover:bg-blue-600/20 font-medium transition-colors"
               >
-                🚀 Batch Assessment
+                <Rocket className="h-4 w-4 mr-2" />
+                Batch Assessment
               </button>
             </div>
           </div>

@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect } from 'react';
-import { Search, Filter, Calendar, Globe, TrendingUp, TrendingDown, Eye, Loader2, RefreshCw, AlertTriangle } from 'lucide-react';
+import { Search, Filter, Calendar, Globe, TrendingUp, TrendingDown, Eye, Loader2, RefreshCw, AlertTriangle, X } from 'lucide-react';
 import { AssessmentResult } from '@/shared/types';
 import { useToast } from './Toast';
 
@@ -118,8 +118,9 @@ export default function AssessmentHistory({ onSelectAssessment, onClose }: Asses
           <button
             onClick={onClose}
             className="absolute top-4 right-4 text-white hover:text-emerald-200 transition-colors p-2 rounded-lg hover:bg-white/10"
+            aria-label="Close"
           >
-            ✕
+            <X className="w-4 h-4" />
           </button>
           <div className="flex items-center gap-3">
             <Calendar className="w-8 h-8 text-white" />

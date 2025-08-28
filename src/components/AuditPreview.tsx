@@ -116,10 +116,16 @@ export default function AuditPreview() {
 
                         <div className="bg-black/40 rounded-lg p-3 mb-4 border border-white/10">
                           <div className="text-xs text-slate-400 mb-2">Code example:</div>
-                          <code className="text-xs text-red-300 font-mono">
-                            {`<img src="hero-image.jpg" />  ❌`}<br />
-                            <span className="text-emerald-300">{`<img src="hero-image.jpg" alt="Team collaborating on accessibility audit" />  ✅`}</span>
-                          </code>
+                          <div className="grid grid-cols-1 gap-3 text-xs text-slate-300">
+                            <div>
+                              <div className="text-[11px] text-red-300 mb-1">Before</div>
+                              <pre className="whitespace-pre-wrap break-words">{`<img src="hero-image.jpg" />`}</pre>
+                            </div>
+                            <div>
+                              <div className="text-[11px] text-emerald-300 mb-1">After</div>
+                              <pre className="whitespace-pre-wrap break-words">{`<img src="hero-image.jpg" alt="Team collaborating on accessibility audit" />`}</pre>
+                            </div>
+                          </div>
                         </div>
 
                         <div className="flex flex-wrap items-center gap-2">
@@ -222,7 +228,7 @@ export default function AuditPreview() {
                 </div>
 
                 <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-lg p-3">
-                  <div className="text-xs text-emerald-300 mb-2">💡 Pro Tip</div>
+                  <div className="text-xs text-emerald-300 mb-2 inline-flex items-center gap-1"><Lightbulb className="h-3 w-3" /> Pro Tip</div>
                   <p className="text-xs text-emerald-200">Fixing the top 3 issues will improve accessibility by 67% and reduce legal risk significantly.</p>
                 </div>
               </div>
