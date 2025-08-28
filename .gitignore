@@ -9,3 +9,5 @@ worker-configuration.d.ts
 .env.production
 .env.development
 .env.test
+# TypeScript incremental build info
+*.tsbuildinfo
