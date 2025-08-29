@@ -71,23 +71,26 @@ This section is the source of truth for new components and refactors.
 ### Phase 1: Core Functionality Fixes (HIGH PRIORITY)
 
 #### 1.1 Environment Setup
-- [ ] Create `.env` file with required API keys:
+- [ ] Create `.env.local` with required keys (do NOT commit):
   - `OPENAI_API_KEY`
-  - `SUPABASE_URL` 
-  - `SUPABASE_ANON_KEY`
+  - `NEXT_PUBLIC_SUPABASE_URL`        # safe for client
+  - `NEXT_PUBLIC_SUPABASE_ANON_KEY`   # safe for client
+  - `SUPABASE_SERVICE_ROLE_KEY`       # server-only, never exposed
 - [ ] Test database connectivity
-
 #### 1.2 Screenshot Upload Implementation  
 - [ ] Add file upload handling to `/src/app/api/assess/route.ts`
-- [ ] Convert uploaded files to base64 for OpenAI processing
+- [ ] Enforce limits (e.g., ≤5 MB, png/jpeg/webp). Reject others.
+- [ ] Stream/zero-copy parsing to avoid buffering large files in memory
+- [ ] Validate image mime/signature; strip EXIF
+- [ ] Convert to base64 for AI processing (server-side only)
 - [ ] Enable screenshot mode in Hero component
 - [ ] Test end-to-end screenshot analysis workflow
-
 #### 1.3 Screenshot Capture Enhancement
 - [ ] Implement proper screenshot generation for URL assessments
 - [ ] Add error handling for screenshot capture failures
-- [ ] Store screenshot URLs in database
-
+- [ ] Store in Supabase Storage bucket `screenshots/`
+- [ ] Enforce RLS and signed URL access (e.g., 24h)
+- [ ] Persist only signed URL + checksum in DB; schedule cleanup
 ### Phase 2: Code Cleanup & Optimization (MEDIUM PRIORITY)
 
 #### 2.1 Architecture Cleanup
@@ -101,12 +104,11 @@ This section is the source of truth for new components and refactors.
 - [ ] Improve user feedback during assessment process
 - [ ] Add loading states and progress indicators
 - [ ] Implement proper validation messages
-
 #### 2.3 API Improvements
 - [ ] Add input validation and sanitization
 - [ ] Implement rate limiting
 - [ ] Add proper error responses
-- [ ] Add request/response logging
+- [ ] Add structured logging with secret/PII redaction (do not log request bodies or images)
 
 ### Phase 3: Feature Enhancements (LOWER PRIORITY)
 

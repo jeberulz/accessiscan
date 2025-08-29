@@ -126,8 +126,12 @@ Current AI returns only 1-2 issues per assessment, far below what human auditors
 
 **Tasks:**
 1. **HTML Source Extraction**
-   - Add Puppeteer/Playwright dependency
-   - Create `src/lib/crawler.ts` for full DOM extraction
+   - Install Puppeteer/Playwright only in server/worker environment (do not bundle in Edge/client)
+   - Explicitly forbid running headless Chromium in Vercel Edge; the crawler must run in a Node runtime (Node serverless function, dedicated Node API endpoint, or separate worker/service)
+   - Create `src/lib/crawler.ts` for full DOM extraction (Node runtime only)
+   - Add a server endpoint for crawling (e.g., `src/app/api/crawl/route.ts`) and configure it to use Node runtime (e.g., `export const runtime = 'nodejs'`); never call Puppeteer/Playwright from Edge
+   - Route all crawl requests through the Node server endpoint/worker; clients never invoke the crawler directly
+   - Ensure service-role env vars and any API keys (e.g., `SUPABASE_SERVICE_ROLE_KEY`, `OPENAI_API_KEY`) are only available to the Node server/worker runtime and not to the Edge runtime; verify Vercel env scoping accordingly
    - Extract: HTML source, computed styles, accessibility tree
    - Include meta info (title, lang, viewport)
 
@@ -231,14 +235,84 @@ Current AI returns only 1-2 issues per assessment, far below what human auditors
 **Tasks:**
 1. **Issue Count Validation**
    ```typescript
-   const validateIssueCount = (issues: Issue[]) => {
-     const minimums = {
+   type Category = 'perceivable' | 'operable' | 'understandable' | 'robust';
+
+   interface ValidationStatus {
+     counts: Record<Category, number>;
+     missingCategories: Category[];
+     actionTaken: 'ok' | 'reanalysis_requested' | 'report_fewer_issues';
+   }
+
+   const validateIssueCount = (
+     issues: Issue[],
+     options?: {
+       minimums?: Partial<Record<Category, number>>;
+       onReanalyze?: () => void | Promise<void>;
+     }
+   ): ValidationStatus => {
+     const defaultMinimums: Record<Category, number> = {
        perceivable: 5,
-       operable: 4, 
+       operable: 4,
        understandable: 3,
        robust: 3
      };
-     // Add synthetic issues if below threshold
+
+     const minimums: Record<Category, number> = {
+       perceivable: options?.minimums?.perceivable ?? defaultMinimums.perceivable,
+       operable: options?.minimums?.operable ?? defaultMinimums.operable,
+       understandable: options?.minimums?.understandable ?? defaultMinimums.understandable,
+       robust: options?.minimums?.robust ?? defaultMinimums.robust
+     };
+
+     const counts: Record<Category, number> = {
+       perceivable: 0,
+       operable: 0,
+       understandable: 0,
+       robust: 0
+     };
+
+     for (const issue of issues) {
+       const category = (issue as any).category as Category | undefined;
+       if (category && counts[category] !== undefined) {
+         counts[category] += 1;
+       }
+     }
+
+     const missingCategories = (Object.keys(minimums) as Category[]).filter(
+       (cat) => counts[cat] < minimums[cat]
+     );
+
+     if (missingCategories.length === 0) {
+       console.info(
+         '[validateIssueCount] Minimums satisfied',
+         { counts }
+       );
+       return { counts, missingCategories, actionTaken: 'ok' };
+     }
+
+     const shortfallSummary = missingCategories
+       .map((cat) => `${cat}: ${counts[cat]}/${minimums[cat]}`)
+       .join(', ');
+
+     if (options?.onReanalyze) {
+       console.warn(
+         '[validateIssueCount] Shortfalls detected; requesting re-analysis',
+         { counts, minimums, missingCategories, shortfallSummary }
+       );
+       try {
+         // fire-and-forget; callers can also await their own wrapper if needed
+         void options.onReanalyze();
+       } catch (err) {
+         console.error('[validateIssueCount] Re-analysis hook threw', err);
+       }
+       return { counts, missingCategories, actionTaken: 'reanalysis_requested' };
+     }
+
+     console.warn(
+       '[validateIssueCount] Shortfalls detected; proceeding with fewer issues',
+       { counts, minimums, missingCategories, shortfallSummary }
+     );
+     return { counts, missingCategories, actionTaken: 'report_fewer_issues' };
    };
    ```
 

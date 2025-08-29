@@ -23,10 +23,21 @@ export default function BatchAssessment({ onBatchComplete, onClose }: BatchAsses
   const [isProcessing, setIsProcessing] = useState(false);
   const [currentProcessing, setCurrentProcessing] = useState<string | null>(null);
 
+// Add this at the top of src/components/BatchAssessment.tsx
+let nextId = 1;
+
+export default function BatchAssessment({ onBatchComplete, onClose }: BatchAssessmentProps) {
+  const [batchItems, setBatchItems] = useState<BatchItem[]>([
+    { id: (nextId++).toString(), url: '', status: 'pending' }
+  ]);
+
   const addUrl = () => {
-    const newId = (batchItems.length + 1).toString();
+    const newId = (nextId++).toString();
     setBatchItems([...batchItems, { id: newId, url: '', status: 'pending' }]);
   };
+
+  // …rest of component…
+}
 
   const removeUrl = (id: string) => {
     if (batchItems.length > 1) {

@@ -1,6 +1,7 @@
 "use client";
-import { Sparkles, Search, Loader2, Link2, Image, Upload, Layers } from 'lucide-react';
+import { Sparkles, Search, Loader2, Link2, Image as ImageIcon, Upload, Layers } from 'lucide-react';
 import { Dispatch, SetStateAction, useState } from 'react';
+import { useToast } from '@/components/Toast';
 
 type Props = {
   websiteUrl: string;
@@ -15,22 +16,104 @@ export default function Hero({ websiteUrl, setWebsiteUrl, loading, onScan, onIma
   const [mode, setMode] = useState<'url' | 'image'>('url');
   const [selectedFileName, setSelectedFileName] = useState<string>("");
   const [selectedImageFile, setSelectedImageFile] = useState<string>("");
+  const { addToast } = useToast();
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const ALLOWED_IMAGE_TYPES = new Set([ 'image/png', 'image/jpeg' ]);
+  const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024; // 5MB
+  const MAX_DIMENSION = 2200; // downscale very large images
+
+  const getMagicBytesOk = (mime: string, bytes: Uint8Array) => {
+    // PNG: 89 50 4E 47 0D 0A 1A 0A
+    if (mime === 'image/png') {
+      const sig = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
+      return sig.every((b, i) => bytes[i] === b);
+    }
+    // JPEG: FF D8 FF ... (EOI FF D9 optional to check later)
+    if (mime === 'image/jpeg') {
+      return bytes[0] === 0xFF && bytes[1] === 0xD8 && bytes[2] === 0xFF;
+    }
+    return false;
+  };
+
+  const sanitizeImage = async (file: File): Promise<string> => {
+    // Basic MIME + size checks
+    const mime = file.type;
+    if (!ALLOWED_IMAGE_TYPES.has(mime)) {
+      throw new Error('Only PNG or JPEG images are allowed.');
+    }
+    if (file.size > MAX_FILE_SIZE_BYTES) {
+      throw new Error(`Image exceeds ${Math.round(MAX_FILE_SIZE_BYTES / (1024 * 1024))}MB.`);
+    }
+
+    // Magic bytes validation
+    const headerBuf = await file.slice(0, 16).arrayBuffer();
+    const header = new Uint8Array(headerBuf);
+    if (!getMagicBytesOk(mime, header)) {
+      throw new Error('Invalid or corrupted image data.');
+    }
+
+    // Decode and re-encode via canvas to strip metadata
+    const objectUrl = URL.createObjectURL(file);
+    try {
+      const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+        const image = new Image();
+        image.onload = () => resolve(image);
+        image.onerror = () => reject(new Error('Failed to decode image.'));
+        image.src = objectUrl;
+        // Prevent potential taint from cross-origin (should not occur for local files)
+        image.crossOrigin = 'anonymous';
+      });
+
+      // Downscale if huge
+      let { width, height } = img;
+      const maxDim = Math.max(width, height);
+      if (maxDim > MAX_DIMENSION) {
+        const scale = MAX_DIMENSION / maxDim;
+        width = Math.max(1, Math.floor(width * scale));
+        height = Math.max(1, Math.floor(height * scale));
+      }
+
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) throw new Error('Canvas not supported.');
+      ctx.drawImage(img, 0, 0, width, height);
+
+      // Prefer PNG to ensure metadata stripped; keeps fidelity for screenshots
+      const dataUrl = canvas.toDataURL('image/png');
+
+      // Post-check size of produced data URL (rough estimate of bytes)
+      const base64Len = dataUrl.includes(',') ? dataUrl.split(',')[1].length : 0;
+      const approxBytes = Math.floor((base64Len * 3) / 4);
+      if (approxBytes > MAX_FILE_SIZE_BYTES) {
+        throw new Error('Processed image is too large after sanitization.');
+      }
+      return dataUrl;
+    } finally {
+      URL.revokeObjectURL(objectUrl);
+    }
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      setSelectedFileName(file.name);
-      
-      // Convert file to base64
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        const base64String = event.target?.result as string;
-        setSelectedImageFile(base64String);
-      };
-      reader.readAsDataURL(file);
-    } else {
+    if (!file) {
       setSelectedFileName("");
       setSelectedImageFile("");
+      return;
+    }
+
+    setSelectedFileName(file.name);
+    try {
+      const safeDataUrl = await sanitizeImage(file);
+      setSelectedImageFile(safeDataUrl);
+      addToast('Image validated and sanitized', 'info', 2500);
+    } catch (err: any) {
+      setSelectedFileName("");
+      setSelectedImageFile("");
+      addToast(err?.message || 'Invalid image selected', 'error');
+      // Clear the input so the same file selection can trigger change again
+      if (e.target) e.target.value = '' as any;
     }
   };
 
@@ -85,7 +168,7 @@ export default function Hero({ websiteUrl, setWebsiteUrl, loading, onScan, onIma
                   }`}
                   onClick={() => setMode('image')}
                 >
-                  <Image className="h-3.5 w-3.5" />
+                  <ImageIcon className="h-3.5 w-3.5" />
                   Screenshot
                 </button>
               </div>

@@ -10,6 +10,29 @@ export const runtime = 'nodejs';
 
 const RequestSchema = AssessmentRequestSchema;
 
+// Server-side image validation helpers
+const ALLOWED_IMAGE_MIME = new Set(['image/png', 'image/jpeg']);
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024; // 5MB
+
+const parseDataUrl = (dataUrl: string): { mime: string; base64: string } | null => {
+  const match = /^data:([^;]+);base64,(.+)$/i.exec(dataUrl || '');
+  if (!match) return null;
+  return { mime: match[1].toLowerCase(), base64: match[2] };
+};
+
+const hasValidMagicBytes = (mime: string, bytes: Uint8Array): boolean => {
+  if (mime === 'image/png') {
+    const sig = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+    return sig.every((b, i) => bytes[i] === b);
+  }
+  if (mime === 'image/jpeg') {
+    // JPEG starts with FFD8FF and ends with FFD9 (end check is optional)
+    const startOk = bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
+    return !!startOk;
+  }
+  return false;
+};
+
 // Helper to extract first balanced JSON block before HUMAN_SUMMARY
 const extractFirstJsonObject = (s: string): string | null => {
   const summaryIdx = s.indexOf('--- HUMAN_SUMMARY ---');
@@ -169,12 +192,47 @@ export async function POST(req: Request) {
 
     try {
       if (assessmentType === 'image') {
+        // Strict server-side validation of data URL
+        if (!imageFile) {
+          return new Response(JSON.stringify({ success: false, message: 'Image file is required' }), { status: 400, headers: { 'content-type': 'application/json' } });
+        }
+        const parsed = parseDataUrl(imageFile);
+        if (!parsed) {
+          return new Response(JSON.stringify({ success: false, message: 'Invalid image data URL format' }), { status: 400, headers: { 'content-type': 'application/json' } });
+        }
+        const { mime, base64 } = parsed;
+        if (!ALLOWED_IMAGE_MIME.has(mime)) {
+          return new Response(JSON.stringify({ success: false, message: 'Unsupported image type. Only PNG and JPEG allowed.' }), { status: 415, headers: { 'content-type': 'application/json' } });
+        }
+        // Basic size check prior to decoding (approx): base64 chars -> bytes ~ 3/4
+        const approxBytes = Math.floor((base64.length * 3) / 4);
+        if (approxBytes > MAX_IMAGE_BYTES) {
+          return new Response(JSON.stringify({ success: false, message: 'Image too large.' }), { status: 413, headers: { 'content-type': 'application/json' } });
+        }
+        // Decode safely
+        let bytes: Uint8Array;
+        try {
+          const buf = Buffer.from(base64, 'base64');
+          bytes = new Uint8Array(buf);
+        } catch (_) {
+          return new Response(JSON.stringify({ success: false, message: 'Failed to decode image data.' }), { status: 400, headers: { 'content-type': 'application/json' } });
+        }
+        // Magic byte validation
+        if (!hasValidMagicBytes(mime, bytes)) {
+          return new Response(JSON.stringify({ success: false, message: 'Image magic bytes do not match MIME type.' }), { status: 400, headers: { 'content-type': 'application/json' } });
+        }
+        // Enforce size after decode as well
+        if (bytes.byteLength > MAX_IMAGE_BYTES) {
+          return new Response(JSON.stringify({ success: false, message: 'Image too large after decoding.' }), { status: 413, headers: { 'content-type': 'application/json' } });
+        }
+
+        // Do not render or execute user-provided data. Send as image_url data URI to the model only.
         analysisTarget = 'uploaded screenshot';
         completion = await openai.chat.completions.create({
           model: 'gpt-4o',
           messages: [
             { role: 'system', content: getSystemPrompt('image') },
-            { role: 'user', content: [ { type: 'text', text: `Return MACHINE_OUTPUT JSON followed by a line '--- HUMAN_SUMMARY ---' then the human summary. Analyze this screenshot.` }, { type: 'image_url', image_url: { url: imageFile! } } ] },
+            { role: 'user', content: [ { type: 'text', text: `Return MACHINE_OUTPUT JSON followed by a line '--- HUMAN_SUMMARY ---' then the human summary. Analyze this screenshot.` }, { type: 'image_url', image_url: { url: `data:${mime};base64,${base64}` } } ] },
           ],
           max_tokens: 3000,
           temperature: 0.2,
@@ -193,8 +251,8 @@ export async function POST(req: Request) {
         }
 
         // Create detailed analysis prompt with structured data
-        const analysisPrompt = enrichedData ? 
-          `Return MACHINE_OUTPUT JSON followed by a line '--- HUMAN_SUMMARY ---' then the human summary.
+        const analysisPrompt = enrichedData
+          ? `Return MACHINE_OUTPUT JSON followed by a line '--- HUMAN_SUMMARY ---' then the human summary.
 
 COMPREHENSIVE ACCESSIBILITY ANALYSIS for: ${websiteUrl}
 
@@ -202,13 +260,12 @@ STRUCTURED DATA PROVIDED:
 =========================
 
 PAGE METADATA:
-- Title: ${enrichedData.pageMetadata.title}
-- Language: ${enrichedData.pageMetadata.lang || 'not specified'}
-- Viewport: ${enrichedData.pageMetadata.viewport || 'not specified'}
+- Title: ${enrichedData.pageMetadata?.title ?? 'not specified'}
+- Viewport: ${enrichedData.pageMetadata?.viewport ?? 'not specified'}
 
 IMAGES ANALYSIS (${enrichedData.images.length} total):
 ${enrichedData.images.map((img, i) => 
-  `${i+1}. ${img.src} - Alt: ${img.alt || 'MISSING'} - Selector: ${img.selector} - Decorative: ${img.isDecorative}`
+  `${i + 1}. ${img.src} - Alt: ${img.alt || 'MISSING'} - Selector: ${img.selector} - Decorative: ${img.isDecorative}`
 ).join('\n')}
 
 FORMS ANALYSIS:
@@ -219,27 +276,27 @@ FORMS ANALYSIS:
 
 HEADINGS STRUCTURE (${enrichedData.headings.length} total):
 ${enrichedData.headings.map((h, i) => 
-  `${i+1}. H${h.level}: "${h.text}" - Selector: ${h.selector} - Empty: ${h.isEmpty}`
+  `${i + 1}. H${h.level}: "${h.text}" - Selector: ${h.selector} - Empty: ${h.isEmpty}`
 ).join('\n')}
 
 LINKS ANALYSIS (${enrichedData.links.length} total):
 ${enrichedData.links.map((link, i) => 
-  `${i+1}. "${link.text}" -> ${link.href} - Generic: ${link.hasGenericText} - Empty: ${link.isEmptyLink}`
+  `${i + 1}. "${link.text}" -> ${link.href} - Generic: ${link.hasGenericText} - Empty: ${link.isEmptyLink}`
 ).join('\n')}
 
 COLOR CONTRAST ANALYSIS (${enrichedData.colors.length} combinations):
 ${enrichedData.colors.map((color, i) => 
-  `${i+1}. ${color.foreground} on ${color.background} - Contrast: ${color.contrast} - AA: ${color.meetsAA} - Context: ${color.context}`
+  `${i + 1}. ${color.foreground} on ${color.background} - Contrast: ${color.contrast} - AA: ${color.meetsAA} - Context: ${color.context}`
 ).join('\n')}
 
 INTERACTIVE ELEMENTS (${enrichedData.interactiveElements.length} total):
 ${enrichedData.interactiveElements.map((el, i) => 
-  `${i+1}. ${el.tagName} - Touch Target: ${el.touchTargetSize.width}x${el.touchTargetSize.height} - Meets Size: ${el.meetsTouchTargetSize} - Focusable: ${el.isFocusable}`
+  `${i + 1}. ${el.tagName} - Touch Target: ${el.touchTargetSize.width}x${el.touchTargetSize.height} - Meets Size: ${el.meetsTouchTargetSize} - Focusable: ${el.isFocusable}`
 ).join('\n')}
 
 LANDMARKS (${enrichedData.landmarks.length} total):
 ${enrichedData.landmarks.map((landmark, i) => 
-  `${i+1}. ${landmark.landmarkType} - Has Label: ${landmark.hasLabel} - Selector: ${landmark.selector}`
+  `${i + 1}. ${landmark.landmarkType} - Has Label: ${landmark.hasLabel} - Selector: ${landmark.selector}`
 ).join('\n')}
 
 DOCUMENT STRUCTURE:
@@ -248,8 +305,8 @@ DOCUMENT STRUCTURE:
 - Skip Links: ${enrichedData.documentStructure.skipLinkCount}
 - Landmark Count: ${enrichedData.documentStructure.landmarkCount}
 
-FIND MINIMUM 15-20 SPECIFIC ISSUES with exact evidence from this data.` :
-          `Return MACHINE_OUTPUT JSON followed by a line '--- HUMAN_SUMMARY ---' then the human summary. Analyze: ${websiteUrl}`;
+FIND MINIMUM 15-20 SPECIFIC ISSUES with exact evidence from this data.`
+          : `Return MACHINE_OUTPUT JSON followed by a line '--- HUMAN_SUMMARY ---' then the human summary. Analyze: ${websiteUrl}`;
 
         completion = await openai.chat.completions.create({
           model: 'gpt-4o',

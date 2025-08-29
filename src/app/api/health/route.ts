@@ -1,6 +1,7 @@
 import { getSupabaseServer } from '@/lib/supabase-server';
 
 export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 
 export async function GET() {
   const timestamp = new Date().toISOString();
@@ -26,28 +27,38 @@ export async function GET() {
         .limit(1);
       
       if (error) {
-        health.services.database = `error: ${error.message}`;
+        health.services.database = 'unhealthy';
       } else {
         health.services.database = 'healthy';
       }
-    } catch (dbError) {
-      health.services.database = `connection error: ${(dbError as Error).message}`;
+    } catch (_dbError) {
+      health.services.database = 'connection_error';
     }
-
+    const status = health.services.database === 'healthy' ? 200 : 503;
     return new Response(
       JSON.stringify(health),
-      { headers: { 'content-type': 'application/json' } }
+      {
+        status,
+        headers: {
+          'content-type': 'application/json',
+          'cache-control': 'no-store'
+        }
+      }
+    );
     );
   } catch (error) {
     return new Response(
       JSON.stringify({
         status: 'error',
         timestamp,
-        error: (error as Error).message
+        error: 'Internal Server Error'
       }),
-      { 
+      {
         status: 500,
-        headers: { 'content-type': 'application/json' } 
+        headers: {
+          'content-type': 'application/json',
+          'cache-control': 'no-store'
+        }
       }
     );
   }

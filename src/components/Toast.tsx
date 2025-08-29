@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, createContext, useContext, ReactNode } from 'react';
+import { useState, useEffect, createContext, useContext, ReactNode, useRef } from 'react';
 import { X, CheckCircle, AlertTriangle, XCircle, Info } from 'lucide-react';
 
 type ToastType = 'success' | 'error' | 'warning' | 'info';
@@ -30,25 +30,54 @@ interface ToastProviderProps {
   children: ReactNode;
 }
 
+function generateToastId(): string {
+  const cryptoObj = (typeof globalThis !== 'undefined' && (globalThis as any).crypto) || undefined;
+  try {
+    if (cryptoObj?.randomUUID) {
+      return cryptoObj.randomUUID();
+    }
+    if (cryptoObj?.getRandomValues) {
+      const buffer = new Uint32Array(4);
+      cryptoObj.getRandomValues(buffer);
+      return Array.from(buffer, n => n.toString(16).padStart(8, '0')).join('-');
+    }
+  } catch {}
+  return `${Date.now()}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`;
+}
+
 export function ToastProvider({ children }: ToastProviderProps) {
   const [toasts, setToasts] = useState<Toast[]>([]);
+  const timeoutRefs = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
   const addToast = (message: string, type: ToastType, duration = 5000) => {
-    const id = Date.now().toString();
+    const id = generateToastId();
     const toast: Toast = { id, message, type, duration };
     
     setToasts(prev => [...prev, toast]);
 
     if (duration > 0) {
-      setTimeout(() => {
+      const timeoutId = setTimeout(() => {
         removeToast(id);
       }, duration);
+      timeoutRefs.current.set(id, timeoutId);
     }
   };
 
   const removeToast = (id: string) => {
+    const timeoutId = timeoutRefs.current.get(id);
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+      timeoutRefs.current.delete(id);
+    }
     setToasts(prev => prev.filter(toast => toast.id !== id));
   };
+
+  useEffect(() => {
+    return () => {
+      timeoutRefs.current.forEach((timeoutId) => clearTimeout(timeoutId));
+      timeoutRefs.current.clear();
+    };
+  }, []);
 
   return (
     <ToastContext.Provider value={{ addToast, removeToast }}>

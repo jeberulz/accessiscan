@@ -44,7 +44,10 @@ export class AccessibilityCrawler {
       await this.initialize();
     }
 
-    const page = await this.browser!.newPage();
+    if (!this.browser) {
+      throw new Error('Browser not initialized');
+    }
+    const page = await this.browser.newPage();
     const startTime = Date.now();
     
     try {
@@ -160,9 +163,10 @@ export class AccessibilityCrawler {
                   img.parentElement?.textContent?.trim()?.substring(0, 100)
         });
       });
-
-      // Background images
-      const elementsWithBgImages = document.querySelectorAll('*');
+      // Background images - limit to likely candidates
+      const elementsWithBgImages = document.querySelectorAll(
+        'div, section, header, main, aside, footer, [style*="background"]'
+      );
       elementsWithBgImages.forEach((el, index) => {
         const styles = window.getComputedStyle(el);
         const bgImage = styles.backgroundImage;
@@ -340,30 +344,45 @@ export class AccessibilityCrawler {
     return await page.evaluate(() => {
       const textElements = document.querySelectorAll('p, span, div, h1, h2, h3, h4, h5, h6, a, button, label');
       const colors: ColorAnalysis[] = [];
-      
+
       textElements.forEach((element, index) => {
         const text = element.textContent?.trim();
         if (!text || text.length === 0) return;
-        
-        const styles = window.getComputedStyle(element);
+
+        const styles = window.getComputedStyle(element as Element);
         const color = styles.color;
-        const backgroundColor = styles.backgroundColor;
-        const fontSize = parseFloat(styles.fontSize);
-        
-        // Simple contrast calculation (approximation)
-        const getColorValues = (colorStr: string) => {
+        const backgroundColor = styles.backgroundColor || 'rgb(255, 255, 255)';
+        const fontSizePx = styles.fontSize;
+        const fontSize = parseFloat(fontSizePx);
+
+        const toHexColor = (colorStr: string) => {
           const canvas = document.createElement('canvas');
           const ctx = canvas.getContext('2d')!;
           ctx.fillStyle = colorStr;
-          return ctx.fillStyle;
+          return ctx.fillStyle as string;
         };
-        
-        const fg = getColorValues(color);
-        const bg = getColorValues(backgroundColor);
-        
-        // Simplified contrast calculation - in real implementation, use proper algorithm
-        const contrast = 4.5; // Placeholder - implement proper contrast calculation
-        
+
+        const fg = toHexColor(color);
+        const bg = toHexColor(backgroundColor);
+
+        const getLuminance = (hexColor: string) => {
+          const canvas = document.createElement('canvas');
+          const ctx = canvas.getContext('2d')!;
+          ctx.fillStyle = hexColor;
+          const hex = ctx.fillStyle as string;
+          const r = parseInt(hex.substr(1, 2), 16) / 255;
+          const g = parseInt(hex.substr(3, 2), 16) / 255;
+          const b = parseInt(hex.substr(5, 2), 16) / 255;
+          const sRGB = [r, g, b].map(c =>
+            c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4)
+          );
+          return 0.2126 * sRGB[0] + 0.7152 * sRGB[1] + 0.0722 * sRGB[2];
+        };
+
+        const fgLum = getLuminance(fg);
+        const bgLum = getLuminance(bg);
+        const contrast = (Math.max(fgLum, bgLum) + 0.05) / (Math.min(fgLum, bgLum) + 0.05);
+
         colors.push({
           foreground: fg,
           background: bg,
@@ -372,11 +391,13 @@ export class AccessibilityCrawler {
           meetsAA: contrast >= 4.5,
           meetsAAA: contrast >= 7,
           fontSize,
-          isLargeText: fontSize >= 18 || (fontSize >= 14 && styles.fontWeight === 'bold'),
+          isLargeText:
+            fontSize >= 18 ||
+            (fontSize >= 14 && (styles.fontWeight === 'bold' || parseInt(styles.fontWeight, 10) >= 700)),
           context: text.substring(0, 50)
         });
       });
-      
+
       return colors;
     });
   }

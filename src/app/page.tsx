@@ -73,13 +73,13 @@ export default function Page() {
     }
   };
 
-  const handleImageScan = async (imageFile: string) => {
+  const performAssessment = async (body: any) => {
     try {
       setLoading(true);
       const res = await fetch('/api/assess', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ assessmentType: 'image', imageFile }),
+        body: JSON.stringify(body),
       });
       const json = await res.json();
       if (json?.success) {
@@ -94,6 +94,16 @@ export default function Page() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleScan = async (source?: 'hero' | 'footer') => {
+    const urlToScan = source === 'footer' ? footerUrl.trim() : websiteUrl.trim();
+    if (!urlToScan) return;
+    await performAssessment({ assessmentType: 'url', websiteUrl: urlToScan });
+  };
+
+  const handleImageScan = async (imageFile: string) => {
+    await performAssessment({ assessmentType: 'image', imageFile });
   };
 
   const handleBatchComplete = (results: AssessmentResult[]) => {

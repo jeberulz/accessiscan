@@ -10,14 +10,56 @@ export async function GET(request: NextRequest) {
     const offset = parseInt(searchParams.get('offset') || '0');
     const website = searchParams.get('website');
     const email = searchParams.get('email');
-    const minScore = searchParams.get('minScore');
-    const maxScore = searchParams.get('maxScore');
+    const minScoreStr = searchParams.get('minScore');
+    const maxScoreStr = searchParams.get('maxScore');
     const dateFrom = searchParams.get('dateFrom');
     const dateTo = searchParams.get('dateTo');
     const impactLevel = searchParams.get('impactLevel');
     const sortBy = searchParams.get('sortBy') || 'date_desc';
 
     const supabase = getSupabaseServer();
+
+    // Validate score filters (0-100 integer)
+    let minScore: number | undefined;
+    let maxScore: number | undefined;
+
+    if (minScoreStr !== null) {
+      const n = Number(minScoreStr);
+      if (!Number.isFinite(n) || !Number.isInteger(n) || n < 0 || n > 100) {
+        return new Response(JSON.stringify({
+          success: false,
+          message: 'Invalid minScore: must be an integer between 0 and 100'
+        }), {
+          status: 400,
+          headers: { 'content-type': 'application/json' }
+        });
+      }
+      minScore = n;
+    }
+
+    if (maxScoreStr !== null) {
+      const n = Number(maxScoreStr);
+      if (!Number.isFinite(n) || !Number.isInteger(n) || n < 0 || n > 100) {
+        return new Response(JSON.stringify({
+          success: false,
+          message: 'Invalid maxScore: must be an integer between 0 and 100'
+        }), {
+          status: 400,
+          headers: { 'content-type': 'application/json' }
+        });
+      }
+      maxScore = n;
+    }
+
+    if (minScore !== undefined && maxScore !== undefined && minScore > maxScore) {
+      return new Response(JSON.stringify({
+        success: false,
+        message: 'Invalid score range: minScore cannot be greater than maxScore'
+      }), {
+        status: 400,
+        headers: { 'content-type': 'application/json' }
+      });
+    }
     
     // Build query
     let query = supabase
@@ -47,12 +89,12 @@ export async function GET(request: NextRequest) {
       query = query.eq('email', email);
     }
 
-    if (minScore) {
-      query = query.gte('overall_score', parseInt(minScore));
+    if (minScore !== undefined) {
+      query = query.gte('overall_score', minScore);
     }
 
-    if (maxScore) {
-      query = query.lte('overall_score', parseInt(maxScore));
+    if (maxScore !== undefined) {
+      query = query.lte('overall_score', maxScore);
     }
 
     if (dateFrom) {

@@ -52,10 +52,19 @@ export default function AssessmentForm({ onAssessmentComplete }: AssessmentFormP
       let formData: AssessmentRequest;
 
       if (assessmentType === 'url') {
-        formData = {
-          assessmentType: 'url',
-          websiteUrl: websiteUrl.trim(),
-        };
+        const trimmed = websiteUrl.trim();
+        try {
+          const url = new URL(trimmed);
+          if (!/^https?:$/.test(url.protocol)) throw new Error('Unsupported protocol');
+          formData = {
+            assessmentType: 'url',
+            websiteUrl: url.toString(),
+          };
+        } catch {
+          setError('Enter a valid URL starting with http:// or https://');
+          setLoading(false);
+          return;
+        }
       } else {
         if (!selectedFile) {
           setError('Please select an image file');
@@ -63,7 +72,6 @@ export default function AssessmentForm({ onAssessmentComplete }: AssessmentFormP
           return;
         }
 
-        // Convert image to base64
         const base64 = await new Promise<string>((resolve) => {
           const reader = new FileReader();
           reader.onload = () => resolve(reader.result as string);
@@ -78,18 +86,22 @@ export default function AssessmentForm({ onAssessmentComplete }: AssessmentFormP
 
       const response = await fetch('/api/assess', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData),
       });
 
-      const result = await response.json();
+      const contentType = response.headers.get('content-type') || '';
+      const data = contentType.includes('application/json') ? await response.json() : null;
 
-      if (result.success) {
-        onAssessmentComplete(result.data);
+      if (!response.ok) {
+        setError(data?.message || `Request failed (${response.status})`);
+        return;
+      }
+
+      if (data?.success) {
+        onAssessmentComplete(data.data);
       } else {
-        setError(result.message || 'Assessment failed');
+        setError(data?.message || 'Assessment failed');
       }
     } catch (error) {
       setError('Network error. Please try again.');
@@ -167,9 +179,25 @@ export default function AssessmentForm({ onAssessmentComplete }: AssessmentFormP
           </div>
         ) : (
           <div className="w-full max-w-md">
+            <input 
+              ref={fileInputRef}
+              id="screenshot-upload"
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              onChange={handleFileSelect}
+              className="hidden"
+            />
             {!selectedFile ? (
-              <div 
-                onClick={() => fileInputRef.current?.click()}
+              <label
+                htmlFor="screenshot-upload"
+                aria-label="Upload website screenshot"
+                tabIndex={0}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    fileInputRef.current?.click();
+                  }
+                }}
                 className="cursor-pointer rounded-xl border-2 border-dashed border-white/20 bg-white/5 p-8 text-center hover:border-emerald-400/50 hover:bg-white/10 transition-colors backdrop-blur"
               >
                 <Upload className="h-12 w-12 text-emerald-400 mx-auto mb-4" />
@@ -180,7 +208,7 @@ export default function AssessmentForm({ onAssessmentComplete }: AssessmentFormP
                 <p className="text-xs text-slate-500">
                   Supports PNG, JPG, WebP • Max 10MB
                 </p>
-              </div>
+              </label>
             ) : (
               <div className="space-y-4">
                 <div className="relative rounded-xl border border-white/10 bg-white/5 p-4 backdrop-blur">
@@ -213,17 +241,20 @@ export default function AssessmentForm({ onAssessmentComplete }: AssessmentFormP
                   ) : (
                     <Search className="h-4 w-4" />
                   )}
-                  {loading ? 'Analyzing Screenshot...' : 'Analyze Screenshot'}
+                  {loading ? 'Scanning...' : 'Scan Screenshot'}
                 </button>
-              </div>
+                {error && (
+                  <div
+                    id="assessment-error"
+                    role="alert"
+                    aria-live="polite"
+                    className="mt-4 max-w-md mx-auto bg-red-500/10 border border-red-500/20 rounded-xl p-4"
+                  >
+                    <p className="text-sm text-red-300">{error}</p>
+                  </div>
+                )}
+                </div>
             )}
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              onChange={handleFileSelect}
-              className="hidden"
-            />
           </div>
         )}
       </form>

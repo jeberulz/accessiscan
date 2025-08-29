@@ -73,7 +73,12 @@ export default function BatchResults({ results, onBack, onNewBatch }: BatchResul
     }
   });
 
-  const avgScore = Math.round(filteredResults.reduce((sum, r) => sum + r.overallScore, 0) / filteredResults.length);
+  const avgScore = filteredResults.length > 0
+    ? Math.round(
+        filteredResults.reduce((sum, r) => sum + r.overallScore, 0) /
+          filteredResults.length
+      )
+    : 0;
   const totalIssues = filteredResults.reduce((sum, r) => sum + r.totalIssues, 0);
   const criticalIssues = filteredResults.reduce((sum, r) => sum + r.criticalIssues, 0);
 
@@ -165,28 +170,31 @@ export default function BatchResults({ results, onBack, onNewBatch }: BatchResul
                 <option value="issues_asc">Fewest Issues</option>
                 <option value="url_asc">Website A-Z</option>
                 <option value="url_desc">Website Z-A</option>
-              </select>
-            </div>
-          </div>
-
           {/* Summary Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-            <div className={`p-6 rounded-xl border ${getScoreBgColor(avgScore)}`}>
-              <div className="text-center">
-                <div className={`text-3xl font-bold mb-2 ${getScoreColor(avgScore)}`}>
-                  {avgScore}
+          {filteredResults.length > 0 && (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+              <div className={`p-6 rounded-xl border ${getScoreBgColor(avgScore)}`}>
+                <div className="text-center">
+                  <div className={`text-3xl font-bold mb-2 ${getScoreColor(avgScore)}`}>
+                    {avgScore}
+                  </div>
+                  <div className="text-sm text-slate-300">Average Score</div>
                 </div>
-                <div className="text-sm text-slate-300">Average Score</div>
+              </div>
+              <div className="p-6 rounded-xl border bg-blue-500/10 border-blue-500/20">
+                <div className="text-center">
+                  <div className="text-3xl font-bold text-blue-400 mb-2">{totalIssues}</div>
+                  <div className="text-sm text-slate-300">Total Issues</div>
+                </div>
+              </div>
+              <div className="p-6 rounded-xl border bg-red-500/10 border-red-500/20">
+                <div className="text-center">
+                  <div className="text-3xl font-bold text-red-400 mb-2">{criticalIssues}</div>
+                  <div className="text-sm text-slate-300">Critical Issues</div>
+                </div>
               </div>
             </div>
-            <div className="p-6 rounded-xl border bg-blue-500/10 border-blue-500/20">
-              <div className="text-center">
-                <div className="text-3xl font-bold text-blue-400 mb-2">{totalIssues}</div>
-                <div className="text-sm text-slate-300">Total Issues</div>
-              </div>
-            </div>
-            <div className="p-6 rounded-xl border bg-red-500/10 border-red-500/20">
-              <div className="text-center">
+          )}
                 <div className="text-3xl font-bold text-red-400 mb-2">{criticalIssues}</div>
                 <div className="text-sm text-slate-300">Critical Issues</div>
               </div>
@@ -212,14 +220,14 @@ export default function BatchResults({ results, onBack, onNewBatch }: BatchResul
               </div>
             ) : (
               sortedResults.map((result) => {
-              const isExpanded = expandedResults.has(String(result.id) || result.websiteUrl);
-              
-              return (
-                <div key={result.id || result.websiteUrl} className="bg-white/5 border border-white/10 rounded-xl overflow-hidden">
+                const rowId = String(result.id || result.websiteUrl);
+                const isExpanded = expandedResults.has(rowId);
+                return (
+                <div key={rowId} className="bg-white/5 border border-white/10 rounded-xl overflow-hidden">
                   {/* Summary Row */}
                   <div 
                     className="p-6 cursor-pointer hover:bg-white/5 transition-colors"
-                    onClick={() => toggleExpanded(String(result.id) || result.websiteUrl)}
+                    onClick={() => toggleExpanded(rowId)}
                   >
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-4">
@@ -289,7 +297,10 @@ export default function BatchResults({ results, onBack, onNewBatch }: BatchResul
 
                       <div className="flex flex-col sm:flex-row gap-3 justify-center">
                         <button
-                          onClick={() => setSelectedResult(result)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedResult(result);
+                          }}
                           className="px-6 py-2 bg-emerald-600 text-white text-sm font-medium rounded-lg hover:bg-emerald-700 transition-colors"
                         >
                           View Detailed Report
@@ -298,8 +309,8 @@ export default function BatchResults({ results, onBack, onNewBatch }: BatchResul
                     </div>
                   )}
                 </div>
-              );
-            })
+                );
+              })
             )}
           </div>
         </div>

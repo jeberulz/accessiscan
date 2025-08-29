@@ -3,6 +3,29 @@ import { AssessmentResult } from '@/shared/types';
 
 export const runtime = 'nodejs';
 
+// Sanitize filename to prevent directory traversal and unsafe characters
+function sanitizeFilename(input: string, maxLength: number = 120): string {
+  if (!input) return 'file';
+  let name = String(input);
+  // Strip traversal sequences and separators
+  name = name
+    .replace(/\.{2}\//g, '')
+    .replace(/\.<\//g, '') // no-op safety in case of odd patterns
+    .replace(/\.\//g, '')
+    .replace(/[\\/]/g, '-');
+  // Remove control chars
+  name = name.replace(/[\u0000-\u001F\u007F]/g, '');
+  // Replace anything not in safe set
+  name = name.replace(/[^a-zA-Z0-9._-]/g, '-');
+  // Collapse hyphens
+  name = name.replace(/-+/g, '-');
+  // Trim leading/trailing dots and hyphens
+  name = name.replace(/^[-.]+|[-.]+$/g, '');
+  if (!name) name = 'file';
+  if (name.length > maxLength) name = name.slice(0, maxLength);
+  return name;
+}
+
 export async function POST(request: NextRequest) {
   try {
     const { assessmentId, format, assessment } = await request.json();
@@ -22,6 +45,16 @@ export async function POST(request: NextRequest) {
     if (assessment) {
       assessmentData = assessment;
     } else if (assessmentId) {
+      // Validate assessmentId (must be case-insensitive UUID format 8-4-4-4-12)
+      if (typeof assessmentId !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(assessmentId)) {
+        return new Response(JSON.stringify({ 
+          success: false, 
+          message: 'Invalid assessmentId format' 
+        }), { 
+          status: 400, 
+          headers: { 'content-type': 'application/json' } 
+        });
+      }
       // Fetch assessment from database if only ID provided
       const { getSupabaseServer } = await import('@/lib/supabase-server');
       const supabase = getSupabaseServer();
@@ -79,9 +112,11 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    const safeSite = sanitizeFilename(assessmentData.websiteUrl);
+
     if (format === 'csv') {
       const csvContent = generateCSV(assessmentData);
-      const filename = `accessibility-report-${assessmentData.websiteUrl.replace(/[^a-zA-Z0-9]/g, '-')}-${new Date().toISOString().split('T')[0]}.csv`;
+      const filename = `accessibility-report-${safeSite}-${new Date().toISOString().split('T')[0]}.csv`;
       
       return new Response(csvContent, {
         headers: {
@@ -97,7 +132,7 @@ export async function POST(request: NextRequest) {
       return new Response(JSON.stringify({ 
         success: true, 
         data: reportData,
-        filename: `accessibility-report-${assessmentData.websiteUrl.replace(/[^a-zA-Z0-9]/g, '-')}-${new Date().toISOString().split('T')[0]}.pdf`
+        filename: `accessibility-report-${safeSite}-${new Date().toISOString().split('T')[0]}.pdf`
       }), { 
         headers: { 'content-type': 'application/json' } 
       });
@@ -113,6 +148,13 @@ export async function POST(request: NextRequest) {
       headers: { 'content-type': 'application/json' } 
     });
   }
+}
+
+function escapeCSV(value: string): string {
+  if (/[",\n]/.test(value)) {
+    return `"${value.replace(/"/g, '""')}"`;
+  }
+  return value;
 }
 
 function generateCSV(assessment: AssessmentResult): string {
@@ -134,7 +176,7 @@ function generateCSV(assessment: AssessmentResult): string {
     'Estimated User Impact'
   ];
 
-  let csvContent = headers.join(',') + '\\n';
+  let csvContent = headers.join(',') + '\n';
 
   // Add summary row
   const summaryRow = [
@@ -154,7 +196,7 @@ function generateCSV(assessment: AssessmentResult): string {
     '"See individual issues below"',
     `"${assessment.estimatedImpact}"`
   ];
-  csvContent += summaryRow.join(',') + '\\n';
+  csvContent += summaryRow.join(',') + '\n';
 
   // Add individual issues
   assessment.issues.forEach(issue => {
@@ -169,13 +211,13 @@ function generateCSV(assessment: AssessmentResult): string {
       assessment.mediumImpactIssues,
       assessment.lowImpactIssues,
       `"${issue.type}"`,
-      `"${issue.description.replace(/"/g, '""')}"`, // Escape quotes in CSV
+      escapeCSV(issue.description),
       `"${issue.impact}"`,
       `"${issue.wcagLevel}"`,
-      `"${issue.recommendation.replace(/"/g, '""')}"`, // Escape quotes in CSV
+      escapeCSV(issue.recommendation),
       `"${assessment.estimatedImpact}"`
     ];
-    csvContent += issueRow.join(',') + '\\n';
+    csvContent += issueRow.join(',') + '\n';
   });
 
   return csvContent;

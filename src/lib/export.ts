@@ -19,10 +19,16 @@ export async function exportAssessment(
     });
 
     if (!response.ok) {
-      const errorData = await response.json();
+      let errorMessage = 'Export failed';
+      try {
+        const errorData = await response.json();
+        errorMessage = errorData.message || errorMessage;
+      } catch {
+        // Fallback for non-JSON error responses
+      }
       return {
         success: false,
-        message: errorData.message || 'Export failed'
+        message: errorMessage
       };
     }
 
@@ -91,7 +97,7 @@ async function generatePDF(data: any): Promise<Blob> {
   // In production, you'd use a proper PDF library like jsPDF
   const textContent = generateTextReport(data);
   
-  return new Blob([textContent], { type: 'application/pdf' });
+  return new Blob([textContent], { type: 'text/plain' });
 }
 
 function generateHTMLReport(data: any): string {

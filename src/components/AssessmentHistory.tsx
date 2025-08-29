@@ -101,7 +101,7 @@ export default function AssessmentHistory({ onSelectAssessment, onClose }: Asses
   };
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
+    return new Date(dateString).toLocaleString('en-US', {
       year: 'numeric',
       month: 'short',
       day: 'numeric',
@@ -366,7 +366,12 @@ export default function AssessmentHistory({ onSelectAssessment, onClose }: Asses
                           <div className="text-xs text-slate-400">Accessibility Score</div>
                         </div>
 
-                        <button className="inline-flex items-center gap-2 bg-emerald-600/20 text-emerald-300 px-3 py-2 rounded-lg hover:bg-emerald-600/30 transition-colors">
+                        <button
+                          type="button"
+                          aria-label={`View assessment for ${assessment.websiteUrl}`}
+                          onClick={(e) => { e.stopPropagation(); onSelectAssessment(assessment); }}
+                          className="inline-flex items-center gap-2 bg-emerald-600/20 text-emerald-300 px-3 py-2 rounded-lg hover:bg-emerald-600/30 transition-colors"
+                        >
                           <Eye className="w-4 h-4" />
                           View
                         </button>

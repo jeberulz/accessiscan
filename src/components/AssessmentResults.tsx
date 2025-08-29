@@ -90,7 +90,17 @@ export default function AssessmentResults({ assessment }: AssessmentResultsProps
   const mediumIssues = assessment.issues.filter(issue => issue.impact === 'medium');
   const lowIssues = assessment.issues.filter(issue => issue.impact === 'low');
 
-  const currentIssue = assessment.issues[selectedIssue] || assessment.issues[0];
+  // Determine the currently selected issue, or null if none exist
+  const currentIssue = assessment.issues[selectedIssue] || assessment.issues[0] || null;
+
+  // Guard against an empty issues array
+  if (!currentIssue) {
+    return (
+      <div className="text-center py-8">
+        <p className="text-slate-400">No issues found in the assessment.</p>
+      </div>
+    );
+  }
 
   const handleExport = async (format: ExportFormat) => {
     setExportLoading(format);
@@ -105,7 +115,7 @@ export default function AssessmentResults({ assessment }: AssessmentResultsProps
         addToast(result.message || `Failed to export ${format.toUpperCase()}`, 'error');
       }
     } catch (error) {
-      addToast(`Export failed: ${error}`, 'error');
+      addToast(`Export failed: ${error instanceof Error ? error.message : String(error)}`, 'error');
     } finally {
       setExportLoading(null);
     }
@@ -139,7 +149,18 @@ export default function AssessmentResults({ assessment }: AssessmentResultsProps
   const goPrev = () => setCategoryPage(p => Math.max(0, p - 1));
   const goNext = () => setCategoryPage(p => Math.min(totalCategoryPages - 1, p + 1));
 
-  const potentialScore = assessment.potentialScore ?? 89;
+  const computedPotentialScore = (() => {
+    const fixableIssues = assessment.issues.filter(issue => issue.quickFix);
+    const impactSum = fixableIssues.reduce((total, issue) => {
+      if (typeof issue.impactScore === 'number') return total + issue.impactScore;
+      return total;
+    }, 0);
+    return Math.min(100, Math.round(assessment.overallScore + impactSum));
+  })();
+
+  const potentialScore = typeof assessment.potentialScore === 'number'
+    ? Math.min(100, assessment.potentialScore)
+    : computedPotentialScore;
 
   return (
     <div className="-mb-8 max-w-7xl md:px-6 mr-auto ml-auto pr-4 pl-4">
@@ -269,7 +290,7 @@ export default function AssessmentResults({ assessment }: AssessmentResultsProps
                                onClick={() => setSelectedIssue(assessment.issues.indexOf(issue))}>
                             <EyeOff className="h-3 w-3 text-red-400" />
                             <span className="text-red-200 truncate">{issue.type}</span>
-                            <span className="ml-auto text-red-300">1</span>
+                            <span className="ml-auto text-red-300">{issue.instances ?? (issue.selectors?.length ?? 0)}</span>
                           </div>
                         ))}
                       </div>
@@ -288,7 +309,7 @@ export default function AssessmentResults({ assessment }: AssessmentResultsProps
                                onClick={() => setSelectedIssue(assessment.issues.indexOf(issue))}>
                             <Contrast className="h-3 w-3 text-orange-400" />
                             <span className="text-orange-200 truncate">{issue.type}</span>
-                            <span className="ml-auto text-orange-300">1</span>
+                            <span className="ml-auto text-orange-300">{issue.instances ?? (issue.selectors?.length ?? 0)}</span>
                           </div>
                         ))}
                       </div>
@@ -307,7 +328,7 @@ export default function AssessmentResults({ assessment }: AssessmentResultsProps
                                onClick={() => setSelectedIssue(assessment.issues.indexOf(issue))}>
                             <MousePointer className="h-3 w-3 text-amber-400" />
                             <span className="text-amber-200 truncate">{issue.type}</span>
-                            <span className="ml-auto text-amber-300">1</span>
+                            <span className="ml-auto text-amber-300">{issue.instances ?? (issue.selectors?.length ?? 0)}</span>
                           </div>
                         ))}
                       </div>
@@ -326,7 +347,7 @@ export default function AssessmentResults({ assessment }: AssessmentResultsProps
                                onClick={() => setSelectedIssue(assessment.issues.indexOf(issue))}>
                             <Tag className="h-3 w-3 text-emerald-400" />
                             <span className="text-emerald-200 truncate">{issue.type}</span>
-                            <span className="ml-auto text-emerald-300">1</span>
+                            <span className="ml-auto text-emerald-300">{issue.instances ?? (issue.selectors?.length ?? 0)}</span>
                           </div>
                         ))}
                       </div>
@@ -421,14 +442,23 @@ export default function AssessmentResults({ assessment }: AssessmentResultsProps
                           <Gavel className="h-3 w-3" />
                           {currentIssue.wcagLevel}
                         </span>
-                        {currentIssue.quickFix && (
-                          <span className="inline-flex items-center gap-1 rounded-md bg-blue-500/10 px-2 py-1 text-xs text-blue-300">
-                            <Clock className="h-3 w-3" />
-                            Quick fix
-                          </span>
-                        )}
-                      </div>
-                    </div>
+//</div> At the top of your component function
+const [imageError, setImageError] = useState(false);
+
+// …later in your JSX…
+{assessment.screenshotUrl && !imageError && (
+  <div className="mt-6 rounded-xl border border-white/10 bg-white/5 p-4">
+    <div className="text-sm text-slate-300 mb-3">Website preview:</div>
+    <div className="relative rounded-lg overflow-hidden border border-white/10">
+      <img
+        src={assessment.screenshotUrl}
+        alt={`Screenshot of ${assessment.websiteUrl}`}
+        className="w-full h-48 object-cover object-top"
+        onError={() => setImageError(true)}
+      />
+    </div>
+  </div>
+)}
                   </div>
                 </div>
               </div>
